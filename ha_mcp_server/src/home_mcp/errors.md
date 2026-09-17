@@ -28,3 +28,6 @@ to_payload(exc)          异常 → error 对象；非本包异常统一归成 I
 bad_request(msg, hint)   构造参数错误
 not_implemented(tool)    构造「尚未实现」错误，M1 阶段七个工具会抛它
 ```
+
+注意：`not_implemented` 的 hint 会经模型转述给最终用户，所以只写用户能懂的话
+（"当前版本只开放了 observe_home"），不写内部文档编号与里程碑代号。

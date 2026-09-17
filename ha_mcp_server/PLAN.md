@@ -13,10 +13,12 @@
               设计里的 tests 共 7 个，其余 3 个单测（conditions / clock / runtime）随 M2、M4 补
         文档：11_最终设计_接入层与统一语义MCP.md §7.1（本轮以此为准）
 待办    M2 只读三件套 → M3 写与判定 → M4 时间与记忆 → M5 验收
-未验证  大模型端到端调用：M1 的验收是协议层（MCP 客户端 SDK），模型侧还没测过；
-        本机没有 ollama / 已下载模型，需要时先装一个本地模型或给一个云端入口
+已验证  大模型端到端调用：DeepSeek deepseek-flash（thinking=disabled）跑 tests\test_llm_smoke.py
+        两轮 8/8 通过；模型第 1 轮命中 observe_home 并中文汇总，第 2 轮先查再动、
+        面对 NOT_IMPLEMENTED 如实说明而不是谎报成功
 已修    contracts 里 array 参数缺 items、object 参数缺 properties —— 主流 function calling
         实现会因此拒收工具定义，已补齐并由契约测试守住
+        错误 hint 里的内部文档编号（"11 号文档""M2~M4"）会被模型转述给用户，已改成用户能懂的说法
 ```
 
 ## 0. 项目定位

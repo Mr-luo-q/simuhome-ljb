@@ -439,24 +439,28 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 实测（真 HA）   tools/list = 8 个工具；observe_home = 3 房间 / 4 环境量 / 虚拟时间，
                living_room 列出 5 台设备（ac、main_light、purifier、side_light、tv）
                契约测试 7/7 通过；端到端 4/4 通过；协议壳词汇检查无命中
-验收到哪一层     协议层：由 MCP 客户端 SDK（mcp.client.stdio + ClientSession）发起
-               initialize → tools/list → tools/call，没有大模型参与
-未覆盖          大模型交互（模型能否选对工具、填对参数、读懂返回）；
-               本机没有可用的本地模型，这项要等有模型入口后再补，补法见 §7.1 末尾
+验收到哪一层     两层都验了：
+               协议层 —— MCP 客户端 SDK 发起 initialize → tools/list → tools/call
+               模型层 —— DeepSeek deepseek-flash（thinking=disabled）直连服务跑两轮，
+                         8/8 项通过：第 1 轮问状态命中 observe_home 并给出中文汇总；
+                         第 2 轮要求开灯，模型依次试 inspect_room / inspect_device /
+                         execute_action，全部 NOT_IMPLEMENTED，最终如实说明无法执行
 沿路修的问题     WebSocket 客户端多命令共用写死的 id，第二条起收不到结果 → 改成一次会话内按 id 严格匹配
                工具 schema 的 array 参数缺 items、object 参数缺 properties → 补上；
                缺这两样时主流 function calling 实现会拒收或在参数上走偏，属大模型调用前的硬前提
+               错误 hint 里写了内部文档编号与里程碑代号，被模型原文转述给用户 → 改成用户能懂的说法
 新增约定        config.yaml 与 data\ 不入库（含令牌占位与运行时数据）
 ```
 
-大模型冒烟测试怎么做（等有模型入口时执行，做完就固化成 tests 里的一个脚本）：
+模型侧冒烟已固化为 `tests\test_llm_smoke.py`，做法与读法：
 
 ```text
-1  起 stdio 服务：python -m home_mcp.entry --config config.yaml
-2  客户端把 tools/list 的 8 个 schema 转成模型的 function 定义，发一句中文请求（如"家里现在什么情况"）
-3  模型选 observe_home → 客户端执行 → 把返回的 JSON 回灌 → 看模型能否只用数据回答
-4  再问一句需要未实现工具的问题（如"帮我把客厅灯打开"），确认模型能正确报告"该工具尚未实现"而不是编造
-5  记录：工具选择是否命中、参数是否合规、是否出现幻觉调用、错误信息是否被模型正确转述
+配置    ha_mcp_server\.env 放 DeepSeek 配置（密钥），HA 令牌读 _secrets\ha_token.txt 或环境变量
+第 1 轮  "家里现在什么情况？"     判定：命中 observe_home / 无幻觉工具名 / 参数合规 / 有答复 / 答复是中文
+第 2 轮  "帮我把客厅的主灯打开。"  判定：确实调了工具 / 说明未实现 / 没有谎报成功
+步数    单轮最多 5 次工具调用，用完会再要一次纯文本结论，避免"还没总结就被截断"的误判
+读数    本机实测：第 2 轮模型先查再动（inspect_room → observe_home → inspect_device →
+        execute_action），说明 M2 的只读工具对模型的行为路径很关键，先于 M3 落地是对的
 ```
 
 ### 7.2 M2 只读三件套（约 1 天）

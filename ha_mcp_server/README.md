@@ -42,6 +42,9 @@ C:\ProgramData\anaconda3\python.exe -m home_mcp.entry --config config.yaml --dry
 
 # 3 端到端：按 stdio 起服务，列工具 + 调 observe_home
 C:\ProgramData\anaconda3\python.exe tests\test_e2e_real_ha.py --config config.yaml
+
+# 4 大模型冒烟：先在 .env 里填 DEEPSEEK_API_KEY，再跑（模型选工具 / 参数合规 / 不谎报）
+C:\ProgramData\anaconda3\python.exe tests\test_llm_smoke.py --config config.yaml
 ```
 
 ## M1 实测结论（2026-09-17）
@@ -52,4 +55,7 @@ observe_home   3 个房间、4 项环境量、虚拟时间；living_room 列出 
 其余 7 个工具   返回 NOT_IMPLEMENTED（契约测试逐个验过）
 契约强制        后端少实现或多实现工具时启动期报错
 协议壳词汇检查    server.py / entry.py / contract\__init__.py 无后端词汇
+大模型冒烟      deepseek-flash 两轮 8/8：第 1 轮命中 observe_home 并给出中文汇总；
+               第 2 轮先查再动（inspect_room → observe_home → inspect_device → execute_action），
+               遇到 NOT_IMPLEMENTED 如实说明，没有谎报"已打开"
 ```
