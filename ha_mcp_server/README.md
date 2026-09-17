@@ -21,8 +21,9 @@ src\home_mcp\
   backend_ha\           HA 后端：client（REST+WS）、mapping（注册表映射）、tools\（8 个工具）
 tests\
   fake_ha.py            离线夹具（真实注册表节选）
-  test_contract_tools.py 契约测试 7 项
-  test_e2e_real_ha.py   端到端：起 stdio 服务跑四项验收
+  test_contract_tools.py 契约测试 10 项
+  test_e2e_real_ha.py   端到端：起 stdio 服务跑 11 项验收
+  test_llm_smoke.py     大模型冒烟：DeepSeek 直连服务，两轮 8 项
 ```
 
 每个 `.py` 都配一份同名中文 `.md`，说明职责、输入输出与边界。
@@ -48,18 +49,12 @@ C:\ProgramData\anaconda3\python.exe tests\test_e2e_real_ha.py --config config.ya
 C:\ProgramData\anaconda3\python.exe tests\test_llm_smoke.py --config config.yaml
 ```
 
-## M1 实测结论（2026-09-17）
+## 最近一次实测结论
 
 ```text
-tools/list     8 个工具
-observe_home   3 个房间、4 项环境量、虚拟时间；living_room 列出 5 台设备
-inspect_room   5 台设备 + 4 环境量 + doors=null；房间不存在 → UNKNOWN_ROOM
-inspect_device 动作与参数范围（空调 7~32 / 步长 0.5，取设备自报值）；设备不存在 → UNKNOWN_DEVICE
-query_events   两层默认过滤（只看本家庭、排除虚拟时间）；近 8 小时 239 条匹配、返回 50 条
-其余 4 个工具   返回 NOT_IMPLEMENTED（契约测试逐个验过）
-契约强制        后端少实现或多实现工具时启动期报错
-协议壳词汇检查    server.py / entry.py / contract\__init__.py 无后端词汇
-大模型冒烟      deepseek-flash 两轮 8/8：第 1 轮命中 observe_home 并给出中文汇总；
-               第 2 轮先查再动（inspect_room → inspect_device → execute_action），
-               遇到 NOT_IMPLEMENTED 如实说明，没有谎报"已打开"
+四条只读工具在真 HA 上通过（3 房间 / 25 实体 / doors=null / 事件两层过滤）；
+其余 4 个返回 NOT_IMPLEMENTED；契约 10/10、端到端 11/11、大模型冒烟 8/8。
+逐项证据与沿路修的问题见
+..\finally new paper\HomeAssistant双仓库接口分析\11_最终设计_接入层与统一语义MCP.md §7，
+本文不重复。
 ```

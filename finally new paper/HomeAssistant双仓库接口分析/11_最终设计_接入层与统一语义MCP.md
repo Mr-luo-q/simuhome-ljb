@@ -90,26 +90,12 @@ recorder         12 项环境量统计 has_mean=True（state_class=measurement �
 D:\D_coderesource\simuhome\                    工作区根目录（★ = git 跟踪）
 │
 ├─★ simuhome_mqtt_publisher\                   【已上线】接入工程
-│  ├─ README.md                                启动方式与进度
-│  ├─ requirements.txt                         paho-mqtt / pyyaml
-│  ├─ broker\
-│  │  ├─ mosquitto.conf                        监听 127.0.0.1:1883、账号密码、日志与持久化
-│  │  ├─ mosquitto.passwd                      密码文件（gitignore）
-│  │  ├─ mosquitto.credentials.txt             明文账号口令，供发布器与脚本读（gitignore）
-│  │  ├─ health_check.py / .md                 连一次 broker 收发自检
-│  │  ├─ start_mosquitto.ps1 / stop_mosquitto.ps1
-│  │  ├─ start_broker.ps1 / stop_broker.ps1    amqtt 遗留（已不用）
-│  │  └─ broker.yaml / run_broker.py / .md     amqtt 遗留（已不用）
-│  ├─ publisher\
-│  │  ├─ config.yaml                           SimuHome 地址、broker 账号、轮询死区、档位参数
-│  │  ├─ publisher.py / .md                    主循环：上行发布 + 下行命令分派
-│  │  ├─ discovery.py / .md                    discovery 配置与全部主题名（主题契约唯一出处）
-│  │  ├─ mapping.py / .md                      设备分类、命名映射、数值换算
-│  │  ├─ simuhome_client.py / .md              SimuHome HTTP 客户端
-│  │  ├─ rename_entities.py / .md              规范 HA 的 entity_id
-│  │  ├─ reset_discovery.py / .md              清空 discovery 重建实体
-│  │  └─ start_publisher.ps1 / stop_publisher.ps1
-│  └─ logs\                                    broker.log / mosquitto.log / publisher.console.err.log（gitignore）
+│  ├─ README.md / requirements.txt             启动方式、进度、依赖
+│  ├─ broker\                                  mosquitto.conf + 凭据 + 启停脚本 + health_check
+│  ├─ publisher\                               6 个模块（publisher / discovery / mapping /
+│  │                                           simuhome_client / rename_entities / reset_discovery）
+│  │                                           各配同名 .md，加 config.yaml 与启停脚本
+│  └─ logs\                                    运行日志（gitignore）
 │
 ├─★ ha_mcp_server\                             【M1+M2 已实现】统一语义 MCP server（M3 起待做）
 │  ├─ PLAN.md / README.md                      计划与文档地图
@@ -399,33 +385,14 @@ NOT_IMPLEMENTED     该工具本阶段还没实现（M1 会出现，逐步消失
 
 ### 5.5 配置格式
 
-```yaml
-ha:
-  base_url: http://localhost:8123
-  token: ${HA_TOKEN}            # 占位符由 runtime 替换；不用 !env（PyYAML 不认）
-  timeout_s: 10
-rooms:
-  living_room: living_room
-  kitchen: kitchen
-  utility_room: utility_room
-room_env: {}                    # 留空：按 area + sensor.device_class 推导四类环境量
-devices: {}                     # 留空：映射表由实体注册表在启动时生成，配置只作覆盖
-doors: []                       # 当前没有门磁实体，inspect_room 的 doors 恒为 null
-execution:
-  verify_after_action: true
-  verify_delay_ms: 500
-  verify_attempts: 3
-events:
-  exclude_entities:
-    - sensor.simuhome_virtual_time
-memory:
-  db_path: ./data/home_mcp.sqlite3   # 相对配置文件所在目录
-server:
-  transport: stdio
-  http:
-    host: 127.0.0.1
-    port: 8765
-    auth_token: ${MCP_TOKEN}
+完整模板在 `ha_mcp_server\config.example.yaml`（`${VAR}` 占位符、令牌不入库），本文只列四条非显然约定：
+
+```text
+room_env / devices / doors   留空：环境量按 area + sensor.device_class 推导，
+                             设备映射由注册表在启动时生成，配置只作覆盖
+verify_delay_ms = 500        实测一次命令 + 回读 236~388 ms，300 ms 会误判
+events.exclude_entities      默认排除 sensor.simuhome_virtual_time（占 logbook 91%~96%）
+memory.db_path               相对配置文件所在目录解析，不相对当前工作目录
 ```
 
 ### 5.6 状态归属与并发
@@ -457,78 +424,36 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 
 ### 7.1 M1 骨架 + observe_home（约 1 天）
 
-状态：已完成（2026-09-17）。实测结果见本节末尾。
+状态：已完成（2026-09-17）
 
 ```text
-内容   entry.py / server.py / errors.py / contract 四件 / runtime 的 config 部分；
-       backend_ha\client.py 的 REST + WS 连接与鉴权；mapping.py 的注册表建表；
-       backend_ha\tools\ 八个文件全部建出，只有 observe_home 做实，其余返回 NOT_IMPLEMENTED
-验收   tools/list 返回 8 个工具；observe_home 返回 3 个房间 + 4 项环境量 + 虚拟时间；
-       其余 7 个调用返回 NOT_IMPLEMENTED；后端少实现工具时启动即报错（契约强制）
-交付   可 stdio 起服务的骨架 + 一份 registry 快照（写进 tests\fake_ha.py 的夹具）
-```
-
-```text
-实测（真 HA）   tools/list = 8 个工具；observe_home = 3 房间 / 4 环境量 / 虚拟时间，
-               living_room 列出 5 台设备（ac、main_light、purifier、side_light、tv）
-               契约测试 7/7 通过；端到端 4/4 通过；协议壳词汇检查无命中
-验收到哪一层     两层都验了：
-               协议层 —— MCP 客户端 SDK 发起 initialize → tools/list → tools/call
-               模型层 —— DeepSeek deepseek-flash（thinking=disabled）直连服务跑两轮，
-                         8/8 项通过：第 1 轮问状态命中 observe_home 并给出中文汇总；
-                         第 2 轮要求开灯，模型依次试 inspect_room / inspect_device /
-                         execute_action，全部 NOT_IMPLEMENTED，最终如实说明无法执行
-沿路修的问题     WebSocket 客户端多命令共用写死的 id，第二条起收不到结果 → 改成一次会话内按 id 严格匹配
-               工具 schema 的 array 参数缺 items、object 参数缺 properties → 补上；
-               缺这两样时主流 function calling 实现会拒收或在参数上走偏，属大模型调用前的硬前提
-               错误 hint 里写了内部文档编号与里程碑代号，被模型原文转述给用户 → 改成用户能懂的说法
-新增约定        config.yaml 与 data\ 不入库（含令牌占位与运行时数据）
-```
-
-模型侧冒烟已固化为 `tests\test_llm_smoke.py`，做法与读法：
-
-```text
-配置    ha_mcp_server\.env 放 DeepSeek 配置（密钥），HA 令牌读 _secrets\ha_token.txt 或环境变量
-第 1 轮  "家里现在什么情况？"     判定：命中 observe_home / 无幻觉工具名 / 参数合规 / 有答复 / 答复是中文
-第 2 轮  "帮我把客厅的主灯打开。"  判定：确实调了工具 / 说明未实现 / 没有谎报成功
-步数    单轮最多 5 次工具调用，用完会再要一次纯文本结论，避免"还没总结就被截断"的误判
-读数    本机实测：第 2 轮模型先查再动（inspect_room → observe_home → inspect_device →
-        execute_action），说明 M2 的只读工具对模型的行为路径很关键，先于 M3 落地是对的
+交付   entry / server / errors / contract 四件 / runtime(配置) / backend_ha(client + mapping + tools 八个)
+验收   tools/list = 8 个工具；observe_home = 3 房间 + 4 环境量 + 虚拟时间；
+       其余 7 个 NOT_IMPLEMENTED；契约 7/7、端到端 4/4、协议壳词汇检查无命中
+模型   tests\test_llm_smoke.py（DeepSeek deepseek-flash）两轮 8/8：
+       第 1 轮命中 observe_home 并给出中文汇总
+沿路修  WS 客户端多命令共用写死的 id（第 2 条起收不到结果）；
+       工具 schema 的 array 缺 items、object 缺 properties（主流 function calling 会拒收）；
+       错误 hint 泄漏内部文档编号（会被模型转述给用户）
+证据   逐项记录在 ha_mcp_server\README.md 与 PLAN.md，本文不重复
 ```
 
 ### 7.2 M2 只读三件套（约 1 天）
 
-状态：已完成（2026-09-18）。实测结果见本节末尾。
+状态：已完成（2026-09-18）
 
 ```text
-内容   inspect_room、inspect_device、query_events
-验收   inspect_room(living_room) → 5 台设备 + 4 项环境量 + doors=null
-       inspect_device(living_room_ac) → 模式 off/cool/heat、设定点范围 7~32、当前温度 26.0
-       inspect_device(living_room_side_light) → 状态 + 动作清单（turn_on/turn_off/toggle）
-       query_events(近 8 小时) → 非空，且不含 sensor.simuhome_virtual_time
-       （原稿写"最近 10 分钟"，实测安静时段 508 条全是虚拟时间、排除后为 0，故改为 8 小时窗口）
-       三个工具对假 HA 与真 HA 各跑一遍，返回结构一致
-交付   假 HA 夹具 + 契约测试用例
-```
-
-```text
-实测（真 HA）   inspect_room(living_room) = 5 台设备 + 4 环境量 + doors=null；
-               inspect_room(garage) → UNKNOWN_ROOM；
-               inspect_device(living_room_ac) = 动作 set_mode/set_temperature，
-                 温度 minimum 7.0 / maximum 32.0 / step 0.5（取设备自报值）；
-               inspect_device(living_room_side_light) = turn_on/turn_off/toggle；
-               inspect_device(ghost) → UNKNOWN_DEVICE；
-               query_events(近 8 小时) = 239 条匹配、返回 50 条，无虚拟时间、实体全在本家庭前缀内；
-               query_events(显式指定虚拟时间) = 5 条，显式请求不被过滤
-测试            契约测试 10/10；真机端到端 11/11；大模型冒烟 8/8
-沿路改的口径     ① query_events 增加"只看本家庭实体"过滤：实测 logbook 里混有 HACS 更新、
-                 太阳、天气等别的集成事件，与 observe_home 按 area 过滤的口径不一致
-               ② "最近 10 分钟非空"这条验收改成"近 8 小时非空"：实测安静时段近 10 分钟
-                 508 条全是虚拟时间、排除后为 0 条，空结果属正常而非故障
-               ③ NOT_IMPLEMENTED 的 hint 改为"可用工具以 tools/list 为准"，
-                 避免每完成一期就要改一次提示文案
-模型侧表现       大模型第 2 轮改走 inspect_room → inspect_device → execute_action，
-               即"先查再动"：M2 落地后模型有了正常观察路径，不再盲试三个未实现工具
+交付   inspect_room / inspect_device / query_events；契约动作表 ACTIONS_BY_KIND；
+       mapping 取值辅助（collect_env / summarize_state / to_number）；client 加 get_state 与 get_logbook
+验收   inspect_room(living_room) = 5 设备 + 4 环境量 + doors=null；不存在 → UNKNOWN_ROOM
+       inspect_device(空调) = set_mode / set_temperature，范围取设备自报 7~32 / 0.5；不存在 → UNKNOWN_DEVICE
+       query_events(近 8 小时) = 239 条匹配、返回 50 条，无虚拟时间、实体全在本家庭前缀内
+       契约 10/10、端到端 11/11、大模型 8/8
+口径   query_events 默认只返回本家庭实体（logbook 混有 HACS 更新等别的集成事件）；
+       "非空"验收从近 10 分钟改为近 8 小时（安静时段 508 条全是虚拟时间、排除后为 0）；
+       错误 hint 指向 tools/list，不列具体工具（会随分期过时）
+模型   大模型第 2 轮改走 inspect_room → inspect_device → execute_action，即"先查再动"
+证据   逐项记录在 ha_mcp_server\README.md 与 PLAN.md
 ```
 
 ### 7.3 M3 写与判定（约 1 天）
@@ -557,30 +482,23 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 ### 7.4 M4 时间与记忆（约 1 天）
 
 ```text
-内容   time_control、memory；runtime 的 sqlite 与调度器
-验收   advance(seconds=5) 返回推进后的快照；超时 30 s 返回 VERIFY_TIMEOUT（不算失败）
-       schedule 10 秒后关灯 → 到点执行成功，回执可查
-       "等设备跑完"这类目标用轮询表达：advance(seconds=n) + inspect_device 循环，
-       模型自己判断状态是否到位（C 粒度下不提供条件等待，接口不替模型做这件事）
-       memory（扩展项，见下）写后读一致；读不存在的 key → UNKNOWN_KEY
-交付   调度器与 sqlite 的表结构 + 单测
-口径   advance 只接受秒数，不做"等到条件成立"——C 粒度下状态只有六个字段，
-       也没有 cron 与状态触发；"洗碗机洗完就关灯"在任务里写成轮询或绝对时间调度
-扩展   memory 是两篇论文之外的工具（SMH 用 {{memory_list}} 上下文注入，SimuHome 没有），
-       按投稿策略属扩展项：初稿可以保留实现，但验收不作硬性要求；
-       要收紧范围就整体推迟到二期，把它写成 scoping
+交付   time_control（advance / schedule / list / cancel）+ runtime 的 sqlite 与调度器
+验收   advance(seconds=5) 返回快照，超时 30 s 记 VERIFY_TIMEOUT（不算失败）；
+       schedule 10 秒后关灯到点执行成功；memory 写后读一致，读不存在的 key → UNKNOWN_KEY
+口径   advance 只接受秒数，不提供"等到条件成立"：C 粒度下状态只有六个字段，
+       也没有 cron 与状态触发；"洗碗机洗完就关灯"这类目标写成轮询（advance + inspect）
+       或绝对时间调度，接口不替模型做这件事
+扩展   memory 属扩展项（两篇都没有记忆工具，SMH 是 {{memory_list}} 上下文注入）：
+       初稿可保留实现但验收不作硬性要求；要收紧范围就整体推迟到二期并写成 scoping
 ```
 
 ### 7.5 M5 验收（约 0.5 天）
 
 ```text
-内容   8 个工具各跑一遍，结果填进第 10 节的验收表；复跑 _架构探针 的六项；
-       把 calls 表导出成一份工具调用统计
-交付   动作词表覆盖率报告：8 个动作 × 两个后端（HA 实测 / 沙盒未建），
-       每格标"已验证 / 当前无设备 / 未实现"——这是支柱三"接口一致性 + 覆盖率"的最小证据
-验收   验收表全绿；探针 6/6 通过；统计里能看到每个工具的调用次数与耗时分布；
-       覆盖率报告里 HA 侧 6 个动作（turn_on/turn_off/toggle/set_mode/set_temperature/
-       set_percentage）全部已验证，set_brightness 与 set_position 标为"当前无设备"
+交付   第 10 节的验收表填满 + 动作词表覆盖率报告（8 个动作 × 2 个后端，
+       每格标"已验证 / 当前无设备 / 未实现"）+ calls 表的调用统计
+验收   验收表全绿；探针 6/6；HA 侧 6 个动作全部已验证，
+       set_brightness 与 set_position 标"当前无设备"
 ```
 
 ### 7.6 二期 / 三期
@@ -601,90 +519,23 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 加 `pyproject.toml`、`README.md`、`config.example.yaml` 三个根文件；每个 `.py` 另配一份同名中文 `.md`
 （如 `observe_home.py` → `observe_home.md`），解释输入输出与职责，改代码必须同步改文档。
 
-### 8.1 publisher.py
+### 8.1 接入层七个模块
 
-```text
-职责      把 SimuHome 状态投影到 MQTT；把 HA 命令翻译成 SimuHome 调用；去重与限流
-输入      config.yaml；SimuHome HTTP API；MQTT 命令主题（set / set_mode / set_temp / set_percent）
-输出      MQTT discovery 与状态主题（retained）、events 回执、控制台日志
-读取      /api/home/state、/api/time、/api/devices/{id}/attributes
-写入      MQTT；经 client 写 SimuHome（OnOff 命令、Thermostat / FanControl 属性）
-不负责    不判断该不该做、不做任务编排、不持有世界真相（缓存仅用于去重与限流）
-对应文件  simuhome_mqtt_publisher\publisher\publisher.py
-```
+模块规格写在各文件的同名 `.md` 里，本文不重复；这里只留一张索引：
 
-### 8.2 discovery.py
+| 模块 | 一句话职责 | 规格文档 |
+| --- | --- | --- |
+| `publisher\publisher.py` | 上行发布 + 下行命令分派、去重限流 | `publisher.md` |
+| `publisher\discovery.py` | discovery 配置与全部主题名（契约唯一出处） | `discovery.md` |
+| `publisher\mapping.py` | 设备分类、命名与取值换算（纯函数） | `mapping.md` |
+| `publisher\simuhome_client.py` | SimuHome HTTP 四类调用，失败抛 SimuHomeError | `simuhome_client.md` |
+| `publisher\rename_entities.py` | 强制规范 entity_id（幂等） | `rename_entities.md` |
+| `publisher\reset_discovery.py` | 清空 discovery 重建实体 | `reset_discovery.md` |
+| `broker\mosquitto.conf` + `health_check.py` | 带认证的 MQTT 传输与收发自检 | `health_check.md` |
 
-```text
-职责      生成 switch / climate / fan / sensor 的 discovery 配置；集中定义全部主题名
-输入      device_id、房间元信息、指标定义、动作参数（温度范围、档位范围）、前缀
-输出      discovery 主题与配置 dict；状态 / 命令主题名的构造函数
-读取/写入 无（纯函数，不发消息）
-不负责    不连 MQTT、不发 retained、不做限流
-对应文件  simuhome_mqtt_publisher\publisher\discovery.py
-```
+跨模块约束留在本文：依赖方向见 §5.1，主题契约见 §4.2，两层命名见 §4.2 末。
 
-### 8.3 mapping.py
-
-```text
-职责      设备分类（switch / climate / fan / skip）、命名与取值换算、payload 解析
-输入      SimuHome 属性字典、device_type、HA 侧 payload 字符串
-输出      类别、摄氏度、0.01°C 整数、0~100 档位、On/Off 命令名
-读取/写入 无（纯函数）
-不负责    不连 HA、不连 MQTT、不碰 discovery 主题
-对应文件  simuhome_mqtt_publisher\publisher\mapping.py
-```
-
-### 8.4 simuhome_client.py
-
-```text
-职责      封装四类 SimuHome HTTP 调用：读全屋、读时间、读属性、写命令 / 写属性
-输入      base_url、timeout、device_id、cluster_id、attribute_id、命令名与参数
-输出      响应里的 data 部分（dict）
-读取      SimuHome REST API
-写入      SimuHome 的命令接口与属性写接口
-不负责    不重试、不判断业务合法性（合法性由 SimuHome 校验并返回错误）
-失败行为  网络 / 超时 / 4xx / 5xx 一律抛 SimuHomeError，由调用方记录进 events
-对应文件  simuhome_mqtt_publisher\publisher\simuhome_client.py
-```
-
-### 8.5 rename_entities.py
-
-```text
-职责      把 HA 自动生成的 entity_id 改成 <domain>.simuhome_<设备或指标>
-输入      HA 长期令牌（默认 ..\..\_secrets\ha_token.txt）、--dry-run
-输出      逐条改名结果与 {"renamed": n}
-读取      HA 实体注册表（WS config/entity_registry/list）
-写入      HA 实体 id（WS config/entity_registry/update）
-不负责    不改 MQTT 主题与 discovery；不改仪表盘与自动化里的引用
-对应文件  simuhome_mqtt_publisher\publisher\rename_entities.py
-```
-
-### 8.6 reset_discovery.py
-
-```text
-职责      向所有 discovery 主题发 retained 空 payload，让 HA 删除旧实体
-输入      config.yaml、broker 凭据文件、SimuHome 当前设备列表
-输出      {"cleared_topics": n}
-读取      SimuHome 设备列表（枚举要清的主题）
-写入      MQTT retained 空消息
-不负责    不重建实体（重建由重启发布器完成）、不改历史统计
-对应文件  simuhome_mqtt_publisher\publisher\reset_discovery.py
-```
-
-### 8.7 broker（mosquitto.conf + health_check.py）
-
-```text
-职责      提供带账号密码的 MQTT 传输与 retained 存储；提供一次收发自检
-输入      客户端连接（HA 与发布器都用 u'simuhome'）
-输出      消息投递、logs\mosquitto.log、logs\mosquitto.db
-读取      broker\mosquitto.passwd、mosquitto.conf
-写入      logs\ 下的日志与持久化文件
-不负责    不做主题级 ACL、不做业务过滤、不校验消息内容
-对应文件  simuhome_mqtt_publisher\broker\mosquitto.conf、health_check.py
-```
-
-### 8.8 ha_mcp_server（8 个工具，一工具一文件）
+### 8.2 ha_mcp_server（8 个工具，一工具一文件）
 
 ```text
 职责      L1：entry.py / server.py / errors.py
@@ -698,20 +549,9 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 不负责    不认识 HA 之外的平台（换后端只换 backend_ha\）、不做任务分解与自动编排
 对应文件  ha_mcp_server\src\home_mcp\（逐文件清单见 3.2，工具契约见 5.2）
 
-8 个工具文件的对应关系，一个工具一个文件，一个文件一份同名 .md：
-
-  backend_ha\tools\observe_home.py    ←→  observe_home       M1
-  backend_ha\tools\inspect_room.py    ←→  inspect_room       M2
-  backend_ha\tools\inspect_device.py  ←→  inspect_device     M2
-  backend_ha\tools\execute_action.py  ←→  execute_action     M3
-  backend_ha\tools\check_goal.py      ←→  check_goal         M3
-  backend_ha\tools\query_events.py    ←→  query_events       M2
-  backend_ha\tools\time_control.py    ←→  time_control       M4
-  backend_ha\tools\memory.py          ←→  memory             M4
-
-文件内部的分工：`contract\tools.py` 定义这 8 个工具的 ToolSpec（名字、参数、返回、错误、时间语义），
-`server.py` 按契约注册，`backend_ha\tools\*.py` 只负责把契约落到 HA 的 REST / WS 调用；
-换沙盒后端时新增 `backend_sandbox\tools\*.py` 即可，协议层与契约层不动。
+8 个工具文件与各自的实现阶段见 §3.2 的 `tools\` 清单（一工具一文件，每个配同名 .md）。
+内部分工：`contract\tools.py` 定契约，`server.py` 按契约注册，`backend_ha\tools\*.py`
+只负责把契约落到 HA 的 REST / WS 调用；换沙盒后端时新增 `backend_sandbox\tools\*.py` 即可。
 ```
 
 ## 9. 风险与边界
@@ -759,15 +599,15 @@ M5 要填的验收表：
 环境侧的自检（改过接入层后跑）：
 
 ```powershell
-# 1 三层是否在跑（8000 / 1883 / 8123 都要有监听）
+# 三层在跑（三个端口都要有监听）
 Get-NetTCPConnection -State Listen | Where-Object { $_.LocalPort -in 8000,1883,8123 }
 
-# 2 实体与命名是否规范：应输出 25 个 simuhome 实体，改名脚本 dry-run 为 0
+# 实体与命名规范：25 个 simuhome 实体；改名脚本 dry-run 应为 0
 C:\ProgramData\anaconda3\python.exe _tools\ha_ws.py config/entity_registry/list --full
 C:\ProgramData\anaconda3\python.exe simuhome_mqtt_publisher\publisher\rename_entities.py --dry-run
 
-# 3 命令闭环：发一条 set_mode=cool，看 simuhome/v1/events 的回执 steps 与 ms
+# 命令闭环：发一条 set_mode=cool，看 simuhome/v1/events 的 steps 与 ms
 ```
 
-架构探针（`HomeAssistant双仓库接口分析\_架构探针\probe.py`）的六项必须保持全绿：
-依赖单向无环、协议壳无后端词汇、换后端零文件改动、缺工具启动即报错、契约跨后端复用、配置占位符可替换。
+架构探针（`_架构探针\probe.py`）六项必须保持全绿：依赖单向无环、协议壳无后端词汇、
+换后端零文件改动、缺工具启动即报错、契约跨后端复用、配置占位符可替换。
