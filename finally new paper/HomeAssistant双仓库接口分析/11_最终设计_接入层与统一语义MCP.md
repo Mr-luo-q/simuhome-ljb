@@ -97,7 +97,7 @@ D:\D_coderesource\simuhome\                    工作区根目录（★ = git �
 │  │                                           各配同名 .md，加 config.yaml 与启停脚本
 │  └─ logs\                                    运行日志（gitignore）
 │
-├─★ ha_mcp_server\                             【M1+M2 已实现】统一语义 MCP server（M3 起待做）
+├─★ ha_mcp_server\                             【M1~M3 已实现】统一语义 MCP server（M4 起待做）
 │  ├─ PLAN.md / README.md                      计划与文档地图
 │  ├─ pyproject.toml                           依赖 pin（mcp==1.26.0）+ entry point ha-mcp
 │  ├─ config.example.yaml                      ${VAR} 占位符配置模板
@@ -132,7 +132,7 @@ D:\D_coderesource\simuhome\                    工作区根目录（★ = git �
 │  │  ├─ test_contract_tools.py                8 个工具跑同一套契约用例
 │  │  ├─ test_e2e_real_ha.py                   连真实 HA 的端到端脚本（手动跑）
 │  │  ├─ test_llm_smoke.py                     DeepSeek 直连服务，验模型选工具与诚实性
-│  │  └─ test_unit_conditions.py / test_unit_clock.py / test_unit_runtime.py  待补（随 M3/M4）
+│  │  └─ test_unit_conditions.py / test_unit_clock.py / test_unit_runtime.py  待补（随 M4）
 │  └─ data\home_mcp.sqlite3                    运行时生成：memory / schedules / calls 三张表
 │
 ├─★ _tools\
@@ -252,8 +252,7 @@ climate   上述 3 个 + set_mode(off|cool|heat)               OnOff 命令 + Th
 fan       上述 3 个 + set_percentage(0~100)                 OnOff 命令 + FanControl.PercentSetting（1 台）
 sensor    只读                                             房间温湿度 / 照度 / PM10、虚拟时间
 
-代码现状（2026-09-18）：switch 3 个 / climate 2 个 / fan 3 个；
-climate 的 on_off 三件套与 fan 的 toggle 在 M3 补齐，补完就是 3 / 5 / 4
+代码现状（2026-09-18，M3 完成）：switch 3 个 / climate 5 个 / fan 4 个
 ```
 
 约束与物理速率（读 SimuHome 源码得到，决定任务的时间尺度）：
@@ -431,7 +430,8 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 验收   tools/list = 8 个工具；observe_home = 3 房间 + 4 环境量 + 虚拟时间；
        其余 7 个 NOT_IMPLEMENTED；契约 7/7、端到端 4/4、协议壳词汇检查无命中
 模型   tests\test_llm_smoke.py（DeepSeek deepseek-flash）两轮 8/8：
-       第 1 轮命中 observe_home 并给出中文汇总
+       第 1 轮命中 observe_home 并给出中文汇总；第 2 轮要求开灯（当时未实现），
+       模型如实说明、没有谎报成功
 沿路修  WS 客户端多命令共用写死的 id（第 2 条起收不到结果）；
        工具 schema 的 array 缺 items、object 缺 properties（主流 function calling 会拒收）；
        错误 hint 泄漏内部文档编号（会被模型转述给用户）
@@ -513,7 +513,7 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 
 按「职责 / 输入 / 输出 / 读取 / 写入 / 不负责 / 对应文件」写，实现时逐条对照。
 
-计数与文档规则：`src\` 22 个 `.py`（已全部落地）+ `tests\` 目标 7 个（当前 5 个，待补 3 个单测随 M3/M4），
+计数与文档规则：`src\` 22 个 `.py`（已全部落地）+ `tests\` 目标 8 个（当前 5 个，待补 3 个单测随 M4），
 加 `pyproject.toml`、`README.md`、`config.example.yaml` 三个根文件；每个 `.py` 另配一份同名中文 `.md`
 （如 `observe_home.py` → `observe_home.md`），解释输入输出与职责，改代码必须同步改文档。
 
