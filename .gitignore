@@ -29,6 +29,9 @@ __pycache__/
 # 本地机密：HA 长期令牌、MCP 令牌等，永不入库
 /_secrets/
 
+# MQTT 工程的运行时日志
+/simuhome_mqtt_publisher/logs/
+
 # 明确排除的外部大目录（本来也不会被放行，写出来是为了可读）
 /.git_old_20260917/
 /.claude/

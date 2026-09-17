@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parent.parent
 TRACKED: dict[str, str] = {
     "finally new paper": "论文讨论与设计文档、benchmark 与方法论文整理、架构图",
     "ha_mcp_server": "自建 MCP server 项目（当前只有长期计划与说明）",
+    "simuhome_mqtt_publisher": "MQTT 接入工程：broker 配置与启动脚本，发布器（M2 待实现）",
     "simuhome_bridge_project": "早期 SimuHome×HA 桥接工程（保留作历史参考，不再扩展）",
     "mcp": "早期 MCP 实验代码与文档（不含 .venv）",
     "_tools": "本地工具与探针：MQTT broker 包、架构探针脚本（安装包与 wheels 不入库）",
