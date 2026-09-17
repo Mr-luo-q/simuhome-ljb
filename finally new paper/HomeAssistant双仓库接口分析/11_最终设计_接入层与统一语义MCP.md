@@ -306,7 +306,7 @@ name / params / returns / errors / time_semantics
 | --- | --- | --- | --- | --- |
 | `observe_home` | 无 | 房间清单 + 每房间环境量 + 虚拟时间 | area 注册表 + 按 area 过滤（44 → 25） | `observe_home` |
 | `inspect_room` | `room_id` | 环境量 + 设备清单 + `doors: null` | 房间→设备与传感器的映射来自注册表视图；环境量聚合与 observe_home 共用 | `inspect_room` |
-| `inspect_device` | `device_id` | 状态 + 可用动作与参数范围 | 动作表来自契约；范围取设备自报值（空调 7~32/0.5、风扇 0~100/1） | `inspect_device` |
+| `inspect_device` | `device_id` | 设备元信息 + 六个状态字段 + 该设备的动作清单 | 状态字段固定 6 个（见下）；动作与范围取设备自报值（空调 7~32/0.5、风扇 0~100/1） | `inspect_device` |
 | `execute_action` | `device_id`、`action`、参数 | 执行结果与回执 | 规范动作 → 服务调用；执行前查可用性；回读 500 ms × 3 | `execute_device_action` |
 | `time_control` | `op`（advance / schedule / list / cancel）、参数 | 快照或预约 id | advance 真等（超时 30 s）；schedule 走 runtime 调度器 | `wait_for_event` + 预约类 |
 | `check_goal` | 条件列表 | 每条是否满足 | 目标命名空间 `<room>.<metric>` / `<device_id>.<attr>` | `check_goal_state` |
@@ -316,17 +316,29 @@ name / params / returns / errors / time_semantics
 统一返回外壳：`{"ok": bool, "data": {...}, "error": {"code","message","hint"}, "meta": {"elapsed_ms","clock"}}`。
 `meta.clock` 标明这次调用消耗的是 `virtual` 还是 `real` 时间。
 
-规范动作词表（两个后端各自翻译，工具层只认这套）：
+规范动作词表（固定 8 个，按设备类别取子集；两个后端各自翻译，工具层只认这套）：
 
 ```text
-switch   turn_on / turn_off / toggle
-climate  set_mode(off|cool|heat) / set_temperature(7.00~32.00，步长 0.5)
-fan      turn_on / turn_off / set_percentage(0~100)
-sensor   只读
+turn_on / turn_off / toggle                       任意可控设备
+set_mode(off|cool|heat)                           空调
+set_temperature(value, 7~32, 步长 0.5)             空调
+set_percentage(value, 0~100)                      风扇
+set_brightness(value, 0~100)                      词表预留：当前没有 light 实体
+set_position(value, 0~100)                        词表预留：当前没有 cover 实体
 
 落到 HA 是 switch.turn_on / climate.set_temperature / fan.set_percentage 等服务调用；
 落到沙盒是 Matter 风格命令或属性写入。
 ```
+
+`inspect_device` 的状态字段固定六个，按设备类别取子集：
+
+```text
+on(bool) / mode(string) / target(number) / level(number) / position(number) / current(number)
+范围与步长不放在状态里，它们属于动作参数；单位由文档约定（摄氏度、百分比）
+```
+
+这套粒度比 SimuHome（endpoint/cluster/attribute）与 SMH-Bench（设备自定义服务名 + 组件命名空间 +
+状态转移规则）都粗，取舍过程与覆盖缺口见 `12_统一能力接口设计.md`。
 
 ### 5.3 错误码
 
@@ -352,11 +364,13 @@ NOT_IMPLEMENTED     该工具本阶段还没实现（M1 会出现，逐步消失
 
 ```text
 建表      启动时读 WS config/entity_registry/list + config/device_registry/list，
-          生成 {device_id → entity_id, domain, area_id, kind, unique_id}；
+          生成 {device_id → entity_id, domain, area_id, category, unique_id}；
           实体自身 area_id 为 None，房间经 device 取
-能力      主体 = get_services_for_target 的服务名列表，按 domain 白名单过滤
-          （它会返回 homeassistant.reload_config_entry 这类管理员服务，必须剔除）；
-          参数 schema 从 REST /api/services 取；supported_features 对 switch 为 null，不用
+动作判定  domain + 属性 → 该设备支持哪些动作：switch/light/fan/climate 给 on_off 三件套；
+          climate 另有 set_mode 与 set_temperature（范围取状态里的 min_temp/max_temp/target_temp_step）；
+          fan 另有 set_percentage（0~100，步长取 percentage_step）；
+          light 有 brightness 属性时给 set_brightness；cover 有 current_position 时给 set_position
+          不依赖 get_services_for_target（它只给服务名还混着管理员服务，supported_features 对 switch 为 null）
 动作      规范动作 → HA 服务；无对应服务返回 UNSUPPORTED_ACTION；
           参数超出设备范围先在本地校验：用设备自报的 min/max（如空调 7~32）比对，
           超界直接 BAD_REQUEST。实测教训：把 40°C 发给 HA 的 climate.set_temperature，
@@ -506,12 +520,15 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 ```text
 内容   execute_action、check_goal
 验收   开关：living_room_side_light turn_on → 回读 on
-       空调：set_temperature 25 → target_temp=25；set_mode cool → 模式 cool
-       风扇：set_percentage 60 → percentage=60
+       空调：set_temperature {value: 25} → 回读 target=25；set_mode {mode: cool} → 回读 mode=cool
+       风扇：set_percentage {value: 60} → 回读 level=60
        越界：温度 40 → BAD_REQUEST；对 sensor 发动作 → UNSUPPORTED_ACTION
        掉线：实体 unavailable 时 → DEVICE_UNAVAILABLE（不发服务调用）
        check_goal(kitchen.temperature lt 24) → pass=false
 交付   写路径与判定路径的契约测试；一次真实 HA 的端到端记录
+口径   状态字段按 §5.2 的六个（on/mode/target/level/position/current）；
+       inspect_device 的状态摘要要同步改成这六个字段（M2 那版还带着
+       target_temperature / min_temperature / percentage 等旧键名，M3 一并换掉）
 ```
 
 ### 7.4 M4 时间与记忆（约 1 天）
@@ -690,9 +707,9 @@ M5 要填的验收表：
 | inspect_room | living_room | 5 台设备 + 4 环境量 + doors=null | | |
 | inspect_device | living_room_side_light | 状态 + turn_on/turn_off/toggle | | |
 | inspect_device | living_room_ac | 模式三种 + 设定点 7~32 + 当前温度 | | |
-| execute_action | 灯 turn_on | 回读 on | | |
-| execute_action | 空调 set_temperature 25 | 回读 target_temp=25 | | |
-| execute_action | 风扇 set_percentage 60 | 回读 percentage=60 | | |
+| execute_action | 灯 turn_on | 回读 on=True | | |
+| execute_action | 空调 set_temperature {value: 25} | 回读 target=25 | | |
+| execute_action | 风扇 set_percentage {value: 60} | 回读 level=60 | | |
 | execute_action | 温度 40 越界 | 返回 BAD_REQUEST | | |
 | execute_action | 实体 unavailable | 返回 DEVICE_UNAVAILABLE | | |
 | time_control(advance) | 等 5 秒内状态变化 | 返回快照，超时 30 s 记 VERIFY_TIMEOUT | | |
