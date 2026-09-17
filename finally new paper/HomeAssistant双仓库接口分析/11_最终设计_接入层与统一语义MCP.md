@@ -26,6 +26,11 @@
   OAuth / 多会话     初稿静态 Bearer + 单实例，多用户留到二期
   录制器 / 守护      不做回放录制与进程守护，崩溃时靠 unavailable 安全失败
   快进              沙盒侧快进能力本轮不用，时间语义见第 6 节
+
+扩展项（超出 SimuHome 与 SMH-Bench 的语义维度，写清边界后保留）
+  query_events      两篇都没有事件查询工具（SimuHome 只有 workflow 列表）
+  memory            两篇都没有记忆工具（SMH 用 {{memory_list}} 上下文注入）
+  房间连通 / 拓扑   两篇都没有空间连通，这是我们的 T1 创新，二期再做
 ```
 
 ## 2. 实测基线
@@ -310,8 +315,8 @@ name / params / returns / errors / time_semantics
 | `execute_action` | `device_id`、`action`、参数 | 执行结果与回执 | 规范动作 → 服务调用；执行前查可用性；回读 500 ms × 3 | `execute_device_action` |
 | `time_control` | `op`（advance / schedule / list / cancel）、参数 | 快照或预约 id | advance 真等（超时 30 s）；schedule 走 runtime 调度器 | `wait_for_event` + 预约类 |
 | `check_goal` | 条件列表 | 每条是否满足 | 目标命名空间 `<room>.<metric>` / `<device_id>.<attr>` | `check_goal_state` |
-| `query_events` | 时间窗、可选实体 | 事件序列 | logbook + 两层默认过滤（只看本家庭、排除虚拟时间），显式实体时全关 | `query_events` |
-| `memory` | `op`（read / write）、`key`、可选 `value` | 记忆内容 | sqlite memory 表 | `memory_read` / `memory_write` |
+| `query_events` | 时间窗、可选实体 | 事件序列 | logbook + 两层默认过滤（只看本家庭、排除虚拟时间），显式实体时全关 | `query_events`（扩展项） |
+| `memory` | `op`（read / write）、`key`、可选 `value` | 记忆内容 | sqlite memory 表 | `memory_read` / `memory_write`（扩展项） |
 
 统一返回外壳：`{"ok": bool, "data": {...}, "error": {"code","message","hint"}, "meta": {"elapsed_ms","clock"}}`。
 `meta.clock` 标明这次调用消耗的是 `virtual` 还是 `real` 时间。
@@ -529,16 +534,28 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 口径   状态字段按 §5.2 的六个（on/mode/target/level/position/current）；
        inspect_device 的状态摘要要同步改成这六个字段（M2 那版还带着
        target_temperature / min_temperature / percentage 等旧键名，M3 一并换掉）
+待补   ACTIONS_BY_KIND 与 C 的口径差三个动作：climate 缺 on_off 三件套、fan 缺 toggle。
+        实测当前是 switch 3 个 / climate 2 个 / fan 3 个，C 要求 3 / 5 / 4；
+        补法是加三条声明 + HA 侧的 climate.toggle、fan.toggle 映射（这两个服务 HA 都提供），
+        沙盒侧仍是同一个 OnOff 命令。验收时按"每类设备的动作数"核对：
+        switch 3、climate 5、fan 4（当前无设备的 set_brightness / set_position 不计）
 ```
 
 ### 7.4 M4 时间与记忆（约 1 天）
 
 ```text
 内容   time_control、memory；runtime 的 sqlite 与调度器
-验收   advance 等到 5 秒内的状态变化并返回快照；超时 30 s 返回 VERIFY_TIMEOUT（不算失败）
+验收   advance(seconds=5) 返回推进后的快照；超时 30 s 返回 VERIFY_TIMEOUT（不算失败）
        schedule 10 秒后关灯 → 到点执行成功，回执可查
-       memory 写后读一致；读不存在的 key → UNKNOWN_KEY
+       "等设备跑完"这类目标用轮询表达：advance(seconds=n) + inspect_device 循环，
+       模型自己判断状态是否到位（C 粒度下不提供条件等待，接口不替模型做这件事）
+       memory（扩展项，见下）写后读一致；读不存在的 key → UNKNOWN_KEY
 交付   调度器与 sqlite 的表结构 + 单测
+口径   advance 只接受秒数，不做"等到条件成立"——C 粒度下状态只有六个字段，
+       也没有 cron 与状态触发；"洗碗机洗完就关灯"在任务里写成轮询或绝对时间调度
+扩展   memory 是两篇论文之外的工具（SMH 用 {{memory_list}} 上下文注入，SimuHome 没有），
+       按投稿策略属扩展项：初稿可以保留实现，但验收不作硬性要求；
+       要收紧范围就整体推迟到二期，把它写成 scoping
 ```
 
 ### 7.5 M5 验收（约 0.5 天）
@@ -546,7 +563,11 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 ```text
 内容   8 个工具各跑一遍，结果填进第 10 节的验收表；复跑 _架构探针 的六项；
        把 calls 表导出成一份工具调用统计
-验收   验收表全绿；探针 6/6 通过；统计里能看到每个工具的调用次数与耗时分布
+交付   动作词表覆盖率报告：8 个动作 × 两个后端（HA 实测 / 沙盒未建），
+       每格标"已验证 / 当前无设备 / 未实现"——这是支柱三"接口一致性 + 覆盖率"的最小证据
+验收   验收表全绿；探针 6/6 通过；统计里能看到每个工具的调用次数与耗时分布；
+       覆盖率报告里 HA 侧 6 个动作（turn_on/turn_off/toggle/set_mode/set_temperature/
+       set_percentage）全部已验证，set_brightness 与 set_position 标为"当前无设备"
 ```
 
 ### 7.6 二期 / 三期
@@ -712,11 +733,14 @@ M5 要填的验收表：
 | execute_action | 风扇 set_percentage {value: 60} | 回读 level=60 | | |
 | execute_action | 温度 40 越界 | 返回 BAD_REQUEST | | |
 | execute_action | 实体 unavailable | 返回 DEVICE_UNAVAILABLE | | |
-| time_control(advance) | 等 5 秒内状态变化 | 返回快照，超时 30 s 记 VERIFY_TIMEOUT | | |
+| execute_action | 空调 set_mode {mode: cool} | 回读 mode=cool | | |
+| execute_action | 空调 turn_off / fan toggle | 回读 on=False / on 取反 | | |
+| inspect_device | 逐类动作数 | switch 3 / climate 5 / fan 4 | | |
+| time_control(advance) | advance(5 s) 后 inspect | 返回快照，超时 30 s 记 VERIFY_TIMEOUT | | |
 | time_control(schedule) | 10 秒后关灯 | 到点执行成功 | | |
 | check_goal | kitchen.temperature lt 24 | pass=false | | |
-| query_events | 近 8 小时 | 非空、不含虚拟时间、实体都在本家庭前缀内 | | |
-| memory | 写后读 | 内容一致 | | |
+| query_events（扩展） | 近 8 小时 | 非空、不含虚拟时间、实体都在本家庭前缀内 | | |
+| memory（扩展） | 写后读 | 内容一致 | | |
 
 环境侧的自检（改过接入层后跑）：
 
