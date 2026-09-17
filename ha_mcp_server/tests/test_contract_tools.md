@@ -11,7 +11,7 @@ inspect_room、inspect_device、query_events、execute_action、check_goal、未
 输出   控制台逐项结果与「n / 12 项通过」，退出码 0/1
 读取   夹具；临时写一个 _tmp_config.yaml 用于测 ${VAR}
 写入   临时配置文件（跑完删除）
-不负责   不连真 HA（真机端到端在 M5 单独跑）
+不负责   不连真 HA（真机端到端在 tests\test_e2e_real_ha.py）
 对应   tests\test_contract_tools.py
 ```
 

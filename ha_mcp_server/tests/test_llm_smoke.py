@@ -1,7 +1,7 @@
-"""大模型冒烟测试：DeepSeek(deepseek-flash) 直连 M1 的 MCP server。
+"""大模型冒烟测试：DeepSeek(deepseek-flash) 直连 M3 的 MCP server。
 
 验的是协议层测不到的东西：模型能不能选对工具、参数填得合不合规、
-工具返回"尚未实现"时会不会编造成功。
+动过设备之后会不会如实汇报（写路径由脚本回读核实并还原）。
 
 用法（先在 .env 里填 DEEPSEEK_API_KEY）：
     python tests\\test_llm_smoke.py --config config.yaml
@@ -175,7 +175,7 @@ async def run_round(
 
 
 async def main_async(config_path: Path) -> int:
-    """跑两轮冒烟：先问状态，再要求一个尚未实现的动作。"""
+    """跑两轮冒烟：先问状态，再要求打开客厅侧灯（真写，跑完还原）。"""
 
     load_dotenv(ENV_PATH)
     env = dict(os.environ)

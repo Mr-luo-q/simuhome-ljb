@@ -1,4 +1,4 @@
-"""端到端脚本：起 stdio 服务，对真 HA 跑 M1+M2 的十项验收。
+"""端到端脚本：起 stdio 服务，对真 HA 跑 M1~M3 的二十一项验收。
 
 手动运行，需要 HA 在跑、config.yaml 与 HA_TOKEN 就绪：
     python tests\\test_e2e_real_ha.py --config config.yaml
@@ -43,7 +43,7 @@ def hours_ago(hours: float) -> str:
 
 
 async def run_check(config_path: Path) -> int:
-    """起服务并跑十项检查，返回失败计数。"""
+    """起服务并跑二十一项检查，返回失败计数。"""
 
     parameters = StdioServerParameters(
         command=sys.executable,
