@@ -13,6 +13,10 @@
               设计里的 tests 共 7 个，其余 3 个单测（conditions / clock / runtime）随 M2、M4 补
         文档：11_最终设计_接入层与统一语义MCP.md §7.1（本轮以此为准）
 待办    M2 只读三件套 → M3 写与判定 → M4 时间与记忆 → M5 验收
+未验证  大模型端到端调用：M1 的验收是协议层（MCP 客户端 SDK），模型侧还没测过；
+        本机没有 ollama / 已下载模型，需要时先装一个本地模型或给一个云端入口
+已修    contracts 里 array 参数缺 items、object 参数缺 properties —— 主流 function calling
+        实现会因此拒收工具定义，已补齐并由契约测试守住
 ```
 
 ## 0. 项目定位

@@ -439,8 +439,24 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 实测（真 HA）   tools/list = 8 个工具；observe_home = 3 房间 / 4 环境量 / 虚拟时间，
                living_room 列出 5 台设备（ac、main_light、purifier、side_light、tv）
                契约测试 7/7 通过；端到端 4/4 通过；协议壳词汇检查无命中
+验收到哪一层     协议层：由 MCP 客户端 SDK（mcp.client.stdio + ClientSession）发起
+               initialize → tools/list → tools/call，没有大模型参与
+未覆盖          大模型交互（模型能否选对工具、填对参数、读懂返回）；
+               本机没有可用的本地模型，这项要等有模型入口后再补，补法见 §7.1 末尾
 沿路修的问题     WebSocket 客户端多命令共用写死的 id，第二条起收不到结果 → 改成一次会话内按 id 严格匹配
+               工具 schema 的 array 参数缺 items、object 参数缺 properties → 补上；
+               缺这两样时主流 function calling 实现会拒收或在参数上走偏，属大模型调用前的硬前提
 新增约定        config.yaml 与 data\ 不入库（含令牌占位与运行时数据）
+```
+
+大模型冒烟测试怎么做（等有模型入口时执行，做完就固化成 tests 里的一个脚本）：
+
+```text
+1  起 stdio 服务：python -m home_mcp.entry --config config.yaml
+2  客户端把 tools/list 的 8 个 schema 转成模型的 function 定义，发一句中文请求（如"家里现在什么情况"）
+3  模型选 observe_home → 客户端执行 → 把返回的 JSON 回灌 → 看模型能否只用数据回答
+4  再问一句需要未实现工具的问题（如"帮我把客厅灯打开"），确认模型能正确报告"该工具尚未实现"而不是编造
+5  记录：工具选择是否命中、参数是否合规、是否出现幻觉调用、错误信息是否被模型正确转述
 ```
 
 ### 7.2 M2 只读三件套（约 1 天）

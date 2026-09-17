@@ -19,6 +19,8 @@ class ParamSpec:
     required: bool = False         # 是否必填
     description: str = ""          # 面向模型的一句话说明
     enum: tuple[str, ...] = ()     # 枚举取值，空表示不限
+    items: dict[str, Any] | None = None        # array 的元素 schema（JSON Schema 片段）
+    properties: dict[str, Any] | None = None   # object 的字段 schema
 
 
 @dataclass(frozen=True)
@@ -68,7 +70,13 @@ TOOLS: tuple[ToolSpec, ...] = (
         params=(
             ParamSpec("device_id", "string", True, "设备 id"),
             ParamSpec("action", "string", True, "规范动作名，如 set_temperature"),
-            ParamSpec("params", "object", False, "动作参数，如 {value: 25.0}"),
+            ParamSpec(
+                "params",
+                "object",
+                False,
+                "动作参数，如 {value: 25.0}",
+                properties={"value": {"type": "number", "description": "动作参数值，温度写摄氏度、档位写 0~100"}},
+            ),
         ),
         returns="result{device_id, action, state_after{}, steps[], elapsed_ms}",
         errors=(
@@ -90,7 +98,21 @@ TOOLS: tuple[ToolSpec, ...] = (
             ParamSpec("op", "string", True, "操作", ("advance", "schedule", "list", "cancel")),
             ParamSpec("seconds", "number", False, "advance 用：等待或推进的秒数"),
             ParamSpec("at", "string", False, "schedule 用：绝对时间，ISO 格式"),
-            ParamSpec("steps", "array", False, "schedule 用：到点执行的动作列表"),
+            ParamSpec(
+                "steps",
+                "array",
+                False,
+                "schedule 用：到点执行的动作列表",
+                items={
+                    "type": "object",
+                    "properties": {
+                        "device_id": {"type": "string", "description": "设备 id"},
+                        "action": {"type": "string", "description": "规范动作名"},
+                        "params": {"type": "object", "description": "动作参数"},
+                    },
+                    "required": ["device_id", "action"],
+                },
+            ),
         ),
         returns="snapshot{} 或 {schedule_id}",
         errors=("HA_UNREACHABLE", "BAD_REQUEST", "INVALID_TIME", "VERIFY_TIMEOUT", "NOT_IMPLEMENTED"),
@@ -100,7 +122,23 @@ TOOLS: tuple[ToolSpec, ...] = (
     ToolSpec(
         name="check_goal",
         summary="验证目标是否达成：给一组条件，逐条判定",
-        params=(ParamSpec("conditions", "array", True, "条件列表，如 [{'target':'kitchen.temperature','op':'lt','value':24}]"),),
+        params=(
+            ParamSpec(
+                "conditions",
+                "array",
+                True,
+                "条件列表，如 [{'target':'kitchen.temperature','op':'lt','value':24}]",
+                items={
+                    "type": "object",
+                    "properties": {
+                        "target": {"type": "string", "description": "目标：<room>.<metric> 或 <device_id>.<attribute>"},
+                        "op": {"type": "string", "description": "比较符", "enum": ["lt", "lte", "gt", "gte", "eq", "ne"]},
+                        "value": {"type": ["number", "string", "boolean"], "description": "目标值"},
+                    },
+                    "required": ["target", "op", "value"],
+                },
+            ),
+        ),
         returns="goals[{target, op, value, pass}]",
         errors=("BAD_TARGET", "BAD_REQUEST", "NOT_IMPLEMENTED"),
         time_semantics="none",
@@ -145,6 +183,13 @@ def to_json_schema(spec: ToolSpec) -> dict[str, Any]:
         entry: dict[str, Any] = {"type": param.type, "description": param.description}
         if param.enum:
             entry["enum"] = list(param.enum)
+        if param.type == "array":
+            # 主流 function calling 实现都要求 array 带 items，否则拒收或走偏
+            entry["items"] = param.items or {"type": "string"}
+        if param.type == "object":
+            # object 带上字段声明，避免被当成空对象
+            entry["properties"] = param.properties or {}
+            entry["additionalProperties"] = True
         properties[param.name] = entry
         if param.required:
             required.append(param.name)

@@ -39,6 +39,11 @@ def test_contract_shape() -> None:
         assert spec.time_semantics in ("none", "real", "virtual", "both")
         unknown = set(spec.errors) - known_codes
         assert not unknown, f"{spec.name} 用了未定义的错误码 {unknown}"
+        for param, prop in schema.get("properties", {}).items():
+            if prop["type"] == "array":
+                assert "items" in prop, f"{spec.name}.{param} 是 array 但没有 items"
+            if prop["type"] == "object":
+                assert "properties" in prop, f"{spec.name}.{param} 是 object 但没有 properties"
 
 
 def test_registry_enforces_contract() -> None:

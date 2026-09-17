@@ -18,11 +18,21 @@
 ```text
 name            工具名
 summary         一句话语义
-params          ParamSpec 列表（type / required / description / enum）
+params          ParamSpec 列表（type / required / description / enum / items / properties）
 returns         返回结构说明
 errors          允许抛出的错误码（字符串，与 errors.py 的一致性由测试保证）
 time_semantics  none / real / virtual / both —— 这次调用消耗哪种时间
 maps_to         论文口径的接口名（如 execute_device_action、check_goal_state）
+```
+
+## JSON Schema 的兼容性要求
+
+```text
+array 参数必须带 items（time_control.steps、check_goal.conditions 都写了元素结构）
+object 参数必须带 properties（execute_action.params 声明了 value 字段，并允许额外字段）
+原因：主流 function calling 实现（含本地模型的受约束解码）遇到缺 items 的 array
+      或缺 properties 的 object 会拒收或自作主张，模型还没开始调工具就先失配
+不追求 OpenAI strict 模式：那要求把所有字段都列进 required，会把可选参数挤成必填
 ```
 
 ## 8 个工具一览
