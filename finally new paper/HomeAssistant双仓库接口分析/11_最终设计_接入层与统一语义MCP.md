@@ -458,25 +458,23 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 
 ### 7.3 M3 写与判定（约 1 天）
 
+状态：已完成（2026-09-18）
+
 ```text
-内容   execute_action、check_goal
-验收   开关：living_room_side_light turn_on → 回读 on
-       空调：set_temperature {value: 25} → 回读 target=25；set_mode {mode: cool} → 回读 mode=cool
-       风扇：set_percentage {value: 60} → 回读 level=60
-       越界：温度 40 → BAD_REQUEST；对 sensor 发动作 → UNSUPPORTED_ACTION
-       掉线：实体 unavailable 时 → DEVICE_UNAVAILABLE（不发服务调用）
-       check_goal(kitchen.temperature lt 24) → pass=false
-交付   写路径与判定路径的契约测试；一次真实 HA 的端到端记录
-口径   状态字段按 §5.2 的六个（on/mode/target/level/position/current）；
-        inspect_device 的状态摘要要同步改成这六个字段（M2 那版还带着
-        target_temperature / min_temperature / percentage 等旧键名，M3 一并换掉）
-待补   ACTIONS_BY_KIND 与 C 的口径差三个动作：climate 缺 on_off 三件套、fan 缺 toggle。
-        实测当前是 switch 3 个 / climate 2 个 / fan 3 个，C 要求 3 / 5 / 4；
-        补法是加三条声明 + HA 侧的 climate.toggle、fan.toggle 映射（这两个服务 HA 都提供），
-        沙盒侧仍是同一个 OnOff 命令。验收时按"每类设备的动作数"核对：
-        switch 3、climate 5、fan 4（当前无设备的 set_brightness / set_position 不计）
-        check_goal 的契约要加 keep 参数（现在只有 conditions），
-         否则 §6 承诺的"无关状态保持"没有落点，两篇论文的评测口径也对不上
+交付   execute_action（四道闸门 + 回读验证）+ check_goal（conditions + keep）；
+       契约补齐到 C 口径（climate 5 个动作、fan 4 个）与 keep 参数；
+       inspect_device 状态换成六字段；mapping 加 device_actions 与 resolve_target
+验收   真机端到端 21/21：灯 turn_on → on=True；空调 set_mode cool / set_temperature 25 →
+       回读一致；风扇 set_percentage 60 → level=60；空调 turn_off 生效；
+       越界 40°C → BAD_REQUEST（本地拦下）；对开关发 set_temperature → UNSUPPORTED_ACTION；
+       check_goal 目标不成立 + 保持条件成立；还原校验三台设备回到测试前状态
+       契约测试 12/12；大模型冒烟 9/9（模型先说"已帮您打开客厅的侧灯"，
+       实机 on=true，随后自动还原 off）
+口径   四道闸门顺序固定：设备存在 → 实体可用 → 动作支持 → 参数范围；
+       回读用 verify_delay_ms 500 × 3，未变只标 verified=false 不算失败
+沿路修  风扇档位 0 的语义：HA 里 percentage=0 就是关机，发布器原来只断电不写档位，
+       留下"已关机但档位仍显示 60"的脏状态 → 改成先补 On、写 PercentSetting=0、再断电
+       （回执 ["On","PercentSetting=0","Off"]），否则实验条件还原不回去
 ```
 
 ### 7.4 M4 时间与记忆（约 1 天）

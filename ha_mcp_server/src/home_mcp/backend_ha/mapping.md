@@ -30,9 +30,14 @@
 ```text
 to_number(value)              状态字符串 → 数值；unknown / unavailable / 空 → None
 collect_env(by_id, entity_ids) 一个房间的传感器实体 → {temperature, humidity, illuminance, pm10}
-summarize_state(kind, state)   实体状态 → 对模型有意义的字段：
-                               climate 给模式 / 设定点 / 当前温度 / 设备自报的温度范围，
-                               fan 给开关与档位，switch 给开关
+summarize_state(kind, state)   实体状态 → 六个字段（on / mode / target / level / position / current），
+                               按类别取子集：climate 给 on+mode+target+current，fan 给 on+level，switch 给 on；
+                               范围与步长不放这里，它们属于动作参数
+device_actions(kind, state)    按类别取动作清单，并用设备自报范围覆盖契约默认值
+                               （inspect_device 与 execute_action 共用同一份，避免两边漂）
+resolve_target(by_id, view, target)  check_goal 的目标解析：
+                               <room>.<metric> 走房间传感器，<device_id>.<字段> 走六字段；
+                               解析不了抛 KeyError，由工具翻成 BAD_TARGET
 ```
 
 范围优先取设备自报值（实测 climate 的 state 里带 min_temp=7.0、max_temp=32.0、

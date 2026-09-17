@@ -39,8 +39,14 @@ class HaRestClient:
         self.token = token                       # 长期访问令牌
         self.timeout_s = float(timeout_s)
 
-    def _request(self, path: str, method: str = "GET", payload: Any = None) -> Any:
-        """发一次请求并解析 JSON；任何网络或 HTTP 错误都翻成 HA_UNREACHABLE。"""
+    def _request(
+        self,
+        path: str,
+        method: str = "GET",
+        payload: Any = None,
+        error_code: ErrorCode = ErrorCode.HA_UNREACHABLE,
+    ) -> Any:
+        """发一次请求并解析 JSON；HTTP 错误按调用方给的错误码翻，默认 HA_UNREACHABLE。"""
 
         data = json.dumps(payload).encode() if payload is not None else None
         request = urllib.request.Request(
@@ -58,7 +64,7 @@ class HaRestClient:
         except urllib.error.HTTPError as err:
             detail = err.read().decode("utf-8", "replace")[:200]
             raise HomeMcpError(
-                ErrorCode.HA_UNREACHABLE, f"{method} {path} 返回 {err.code}", detail
+                error_code, f"{method} {path} 返回 {err.code}", detail
             ) from err
         except (urllib.error.URLError, TimeoutError) as err:
             raise HomeMcpError(ErrorCode.HA_UNREACHABLE, f"{method} {path} 失败：{err}") from err
@@ -103,12 +109,21 @@ class HaRestClient:
         data: dict[str, Any] | None = None,
         entity_id: str | None = None,
     ) -> Any:
-        """调用一个服务；给了 entity_id 就带上目标。"""
+        """调用一个服务；给了 entity_id 就带上目标。
+
+        HA 对服务调用失败（含参数越界）返回 4xx/5xx，这里按 SERVICE_ERROR 抛，
+        与"连不上 HA"区分开，便于上层决定是重试还是报参数问题。
+        """
 
         payload: dict[str, Any] = dict(data or {})
         if entity_id:
             payload["entity_id"] = entity_id
-        return self._request(f"/api/services/{domain}/{service}", method="POST", payload=payload)
+        return self._request(
+            f"/api/services/{domain}/{service}",
+            method="POST",
+            payload=payload,
+            error_code=ErrorCode.SERVICE_ERROR,
+        )
 
 
 class HaWsClient:

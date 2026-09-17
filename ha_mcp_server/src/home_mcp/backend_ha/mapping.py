@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..contract import action_payload, actions_for_kind
+
 
 IDENTIFIER_PREFIX = "simuhome_"
 UNIQUE_ID_PREFIX = "simuhome_"
@@ -125,7 +127,10 @@ def collect_env(by_id: dict[str, dict[str, Any]], entity_ids: list[str]) -> dict
 
 
 def summarize_state(kind: str, entity_state: dict[str, Any] | None) -> dict[str, Any]:
-    """把实体状态压成对模型有意义的几个字段，按设备类型不同。"""
+    """六字段状态摘要（on / mode / target / level / position / current），按类别取子集。
+
+    范围与步长不放这里——它们属于动作参数，见 device_actions()。
+    """
 
     state = entity_state or {}
     attributes = state.get("attributes") or {}
@@ -133,20 +138,72 @@ def summarize_state(kind: str, entity_state: dict[str, Any] | None) -> dict[str,
 
     if kind == "climate":
         return {
-            "mode": raw,                                             # off / cool / heat
-            "target_temperature": attributes.get("temperature"),      # 当前设定点
-            "current_temperature": attributes.get("current_temperature"),
-            "min_temperature": attributes.get("min_temp"),            # 设备自报的范围
-            "max_temperature": attributes.get("max_temp"),
-            "temperature_step": attributes.get("target_temp_step"),
+            "on": raw != "off",                                       # 是否通电
+            "mode": raw,                                              # off / cool / heat
+            "target": attributes.get("temperature"),                  # 目标温度
+            "current": attributes.get("current_temperature"),         # 设备自测温度
         }
     if kind == "fan":
-        return {
-            "on": raw != "off",
-            "percentage": attributes.get("percentage"),
-            "percentage_step": attributes.get("percentage_step"),
-        }
-    return {"on": raw == "on", "raw_state": raw}
+        return {"on": raw != "off", "level": attributes.get("percentage")}
+    return {"on": raw == "on"}
+
+
+def device_actions(kind: str, entity_state: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """给一台设备算动作清单，并用设备自报的范围覆盖契约默认值。
+
+    inspect_device 返回它，execute_action 也按它校验——同一份数据，不会两边漂。
+    """
+
+    actions = [action_payload(action) for action in actions_for_kind(kind)]
+    attributes = (entity_state or {}).get("attributes") or {}
+    for action in actions:
+        for spec in action.get("params", {}).values():
+            if spec.get("type") not in ("number", "integer"):
+                continue
+            if kind == "climate":
+                low = attributes.get("min_temp")
+                high = attributes.get("max_temp")
+                step = attributes.get("target_temp_step")
+            elif kind == "fan":
+                low, high, step = 0, 100, attributes.get("percentage_step")
+            else:
+                continue
+            if low is not None:
+                spec["minimum"] = low
+            if high is not None:
+                spec["maximum"] = high
+            if step is not None:
+                spec["step"] = step
+    return actions
+
+
+def resolve_target(
+    by_id: dict[str, dict[str, Any]], view: "RegistryView", target: str
+) -> tuple[Any, str]:
+    """把 check_goal 的目标解析成当前值，返回 (值, 来源实体)。
+
+    支持两种写法：<room>.<metric>（房间环境量）与 <device_id>.<字段>（设备六字段之一）。
+    解析不了抛 KeyError，由调用方翻成 BAD_TARGET。
+    """
+
+    head, _, field = target.partition(".")
+    if not field:
+        raise KeyError(f"目标要写成 <room>.<metric> 或 <device_id>.<字段>：{target}")
+
+    if head in view.areas:                                  # 房间环境量
+        for entity_id in view.sensors_by_area.get(head, []):
+            state = by_id.get(entity_id)
+            if metric_of(state) == field:
+                return to_number((state or {}).get("state")), entity_id
+        raise KeyError(f"房间 {head} 没有指标 {field}")
+
+    row = view.devices.get(head)                            # 设备六字段
+    if row is None:
+        raise KeyError(f"既不是房间也不是设备：{target}")
+    summary = summarize_state(row.kind, by_id.get(row.entity_id))
+    if field not in summary or summary[field] is None:
+        raise KeyError(f"设备 {head} 没有字段 {field}，可选 {sorted(k for k, v in summary.items() if v is not None)}")
+    return summary[field], row.entity_id
 
 
 def build_view(

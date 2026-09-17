@@ -22,6 +22,9 @@ fan      类型为 fan 且有 FanControl  发布 state / percent，命令 set、
 
 空调与风扇的档位属性有上电依赖：设备处于 Off 时先补发一条 On，并把这一步写进命令回执的
 `steps` 字段（例如 `["On", "SystemMode=3"]`），不做隐式状态修改。
+风扇档位收到 0 时的语义是"关机"：先补 On、把 PercentSetting 写成 0、再断电，
+回执为 `["On", "PercentSetting=0", "Off"]`——只断电不写档位会留下"已关机但档位仍显示 60"
+的脏状态，还原实验条件时对不上。
 
 ## 命令主题
 

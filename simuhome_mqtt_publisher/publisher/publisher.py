@@ -207,8 +207,14 @@ class Publisher:
             raise SimuHomeError(f"非法的档位 payload：{payload!r}")
 
         if percent == 0:
+            # HA 里 percentage=0 就是关机：先把档位真正写到 0（属性有上电依赖，
+            # 所以先补一条 On），再断电。否则会留下"关了但档位仍显示 60"的脏状态。
+            steps = self._ensure_power_on(device_id)
+            self.client.write_attribute(device_id, FAN_CONTROL_CLUSTER, "PercentSetting", 0)
+            steps.append("PercentSetting=0")
             self.client.execute_onoff(device_id, "Off")
-            return {"steps": ["Off", "percent=0"]}
+            steps.append("Off")
+            return {"steps": steps}
 
         steps = self._ensure_power_on(device_id)
         self.client.write_attribute(device_id, FAN_CONTROL_CLUSTER, "PercentSetting", percent)

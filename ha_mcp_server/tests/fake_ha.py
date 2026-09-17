@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from home_mcp.errors import ErrorCode, HomeMcpError
+
 
 AREAS: list[dict[str, Any]] = [
     {"area_id": "living_room", "name": "living_room"},
@@ -87,14 +89,15 @@ LOGBOOK: list[dict[str, Any]] = [
 
 
 class FakeRestClient:
-    """假 REST 客户端：状态、单实体状态与 logbook 三件事，供只读工具离线测试。"""
+    """假 REST 客户端：状态、单实体状态、logbook 与服务调用，供读写工具离线测试。"""
 
     def __init__(
         self,
         states: list[dict[str, Any]] | None = None,
         logbook: list[dict[str, Any]] | None = None,
     ) -> None:
-        self._states = states if states is not None else STATES   # 可注入别的状态
+        source = states if states is not None else STATES
+        self._states = [dict(item) for item in source]            # 可变副本，写路径要改它
         self._logbook = logbook if logbook is not None else LOGBOOK
 
     def get_states(self) -> list[dict[str, Any]]:
@@ -116,3 +119,44 @@ class FakeRestClient:
         if entity_id:
             return [dict(item) for item in self._logbook if item.get("entity_id") == entity_id]
         return [dict(item) for item in self._logbook]
+
+    def _find(self, entity_id: str) -> dict[str, Any] | None:
+        """按 entity_id 找状态条目。"""
+
+        for item in self._states:
+            if item.get("entity_id") == entity_id:
+                return item
+        return None
+
+    def call_service(
+        self,
+        domain: str,
+        service: str,
+        data: dict[str, Any] | None = None,
+        entity_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """假 HA 的写路径：按 domain.service 改状态或属性，够 execute_action 回读用。"""
+
+        payload = dict(data or {})
+        target = str(payload.pop("entity_id", None) or entity_id or "")
+        item = self._find(target)
+        if item is None:
+            raise HomeMcpError(ErrorCode.SERVICE_ERROR, f"假 HA 没有实体 {target}")
+
+        attributes = item.setdefault("attributes", {})
+        if service == "turn_on":
+            item["state"] = "cool" if domain == "climate" else "on"
+        elif service == "turn_off":
+            item["state"] = "off"
+        elif service == "toggle":
+            running = item["state"] not in ("off", "unavailable", "unknown")
+            item["state"] = "off" if running else ("cool" if domain == "climate" else "on")
+        elif service == "set_hvac_mode":
+            item["state"] = str(payload.get("hvac_mode") or "off")
+        elif service == "set_temperature":
+            attributes["temperature"] = float(payload.get("temperature"))
+        elif service == "set_percentage":
+            attributes["percentage"] = int(payload.get("percentage"))
+        else:
+            raise HomeMcpError(ErrorCode.SERVICE_ERROR, f"假 HA 不支持 {domain}.{service}")
+        return [{"entity_id": target}]

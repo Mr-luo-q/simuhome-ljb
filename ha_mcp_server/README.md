@@ -3,8 +3,9 @@
 自建的 MCP server：对外暴露 8 个工具（观察、控制、时间、验证、记忆），先接 Home Assistant，架构上可替换后端。
 
 ```text
-当前状态    M1+M2 完成：8 个工具都已建出；observe_home / inspect_room / inspect_device /
-           query_events 四个只读工具做实并在真 HA 上跑通；其余 4 个返回 NOT_IMPLEMENTED
+当前状态    M1~M3 完成：8 个工具都已建出；observe_home / inspect_room / inspect_device /
+           query_events / execute_action / check_goal 六个做实并在真 HA 上跑通
+           （含写路径与还原验证）；time_control / memory 仍是 NOT_IMPLEMENTED
 设计文档    ..\finally new paper\HomeAssistant双仓库接口分析\11_最终设计_接入层与统一语义MCP.md
 长期计划    PLAN.md（M1~M5 的进度与分期）
 解耦验证    ..\finally new paper\HomeAssistant双仓库接口分析\_架构探针\（六项报告）

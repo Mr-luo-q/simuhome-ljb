@@ -48,19 +48,28 @@ query_events    事件查询
 memory          长期记忆读写
 ```
 
-注意：`NOT_IMPLEMENTED` 写进了每个工具的错误列表，它是分期实现的产物（M1 只做实
-`observe_home`），M4 完成后会从契约里删掉。
+注意：`NOT_IMPLEMENTED` 写进了每个工具的错误列表，它是分期实现的产物
+（M3 之后只剩 `time_control` 与 `memory` 会返回它），M4 完成后会从契约里删掉。
 
 ## 规范动作表（ACTIONS_BY_KIND）
 
 同一份动作定义供两个工具用：`inspect_device` 返回它给模型看，`execute_action` 按它校验。
 
 ```text
-switch    turn_on / turn_off / toggle
-climate   set_mode(off|cool|heat)
-          set_temperature(value: 7~32，步长 0.5)
-fan       turn_on / turn_off / set_percentage(value: 0~100，步长 1)
+switch   3 个：turn_on / turn_off / toggle
+climate  5 个：上述 3 个 + set_mode(off|cool|heat) + set_temperature(7~32，步长 0.5)
+fan      4 个：上述 3 个 + set_percentage(0~100，步长 1)
 ```
 
 `ParamSpec` 的 minimum / maximum / step 会同时写进 JSON Schema（minimum / maximum / multipleOf），
 所以模型在 tools/list 阶段就能看到取值范围。
+
+词表里另有 `set_brightness` 与 `set_position`：当前没有 light / cover 实体，属词表预留。
+
+## check_goal 的两组条件
+
+```text
+conditions  目标条件（必填）
+keep        必须保持不变的条件（可选），对齐两篇论文的"无关状态保持"
+两者共用 CONDITION_ITEM_SCHEMA：{target, op, value}，op ∈ lt/lte/gt/gte/eq/ne
+```

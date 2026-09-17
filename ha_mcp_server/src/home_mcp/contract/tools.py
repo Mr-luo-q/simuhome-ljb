@@ -48,6 +48,17 @@ class ToolSpec:
     maps_to: str                   # 论文口径的接口名，统计与写作时对齐
 
 
+# check_goal 的条件对象 schema：conditions 与 keep 复用同一份
+CONDITION_ITEM_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "target": {"type": "string", "description": "目标：<room>.<metric> 或 <device_id>.<字段>"},
+        "op": {"type": "string", "description": "比较符", "enum": ["lt", "lte", "gt", "gte", "eq", "ne"]},
+        "value": {"type": ["number", "string", "boolean"], "description": "目标值"},
+    },
+    "required": ["target", "op", "value"],
+}
+
 TOOLS: tuple[ToolSpec, ...] = (
     ToolSpec(
         name="observe_home",
@@ -140,18 +151,17 @@ TOOLS: tuple[ToolSpec, ...] = (
                 "array",
                 True,
                 "条件列表，如 [{'target':'kitchen.temperature','op':'lt','value':24}]",
-                items={
-                    "type": "object",
-                    "properties": {
-                        "target": {"type": "string", "description": "目标：<room>.<metric> 或 <device_id>.<attribute>"},
-                        "op": {"type": "string", "description": "比较符", "enum": ["lt", "lte", "gt", "gte", "eq", "ne"]},
-                        "value": {"type": ["number", "string", "boolean"], "description": "目标值"},
-                    },
-                    "required": ["target", "op", "value"],
-                },
+                items=CONDITION_ITEM_SCHEMA,
+            ),
+            ParamSpec(
+                "keep",
+                "array",
+                False,
+                "必须保持不变的条件列表（对齐两篇论文的“无关状态保持”），格式与 conditions 相同",
+                items=CONDITION_ITEM_SCHEMA,
             ),
         ),
-        returns="goals[{target, op, value, pass}]",
+        returns="goals[{target, op, value, actual, pass}] + keep[...] + all_pass",
         errors=("BAD_TARGET", "BAD_REQUEST", "NOT_IMPLEMENTED"),
         time_semantics="none",
         maps_to="check_goal_state",
@@ -193,6 +203,9 @@ ACTIONS_BY_KIND: dict[str, tuple[ActionSpec, ...]] = {
         ActionSpec("toggle", (), "在当前状态上取反"),
     ),
     "climate": (
+        ActionSpec("turn_on", (), "打开空调"),
+        ActionSpec("turn_off", (), "关闭空调"),
+        ActionSpec("toggle", (), "在当前模式与关闭之间取反"),
         ActionSpec(
             "set_mode",
             (ParamSpec("mode", "string", True, "目标模式", ("off", "cool", "heat")),),
@@ -207,6 +220,7 @@ ACTIONS_BY_KIND: dict[str, tuple[ActionSpec, ...]] = {
     "fan": (
         ActionSpec("turn_on", (), "打开风扇"),
         ActionSpec("turn_off", (), "关闭风扇"),
+        ActionSpec("toggle", (), "在当前状态上取反"),
         ActionSpec(
             "set_percentage",
             (ParamSpec("value", "integer", True, "档位百分比，0 等于关机", minimum=0, maximum=100, step=1),),

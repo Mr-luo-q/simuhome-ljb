@@ -15,6 +15,9 @@ HA 的连接层，两类客户端：REST（状态与服务）与 WebSocket（三
 对应文件 src\home_mcp\backend_ha\client.py
 ```
 
+例外：`call_service()` 的 HTTP 错误按 `SERVICE_ERROR` 抛（HA 对服务调用失败与参数越界
+返回 4xx/5xx），与"连不上 HA"分开——上层据此判断该重试还是该报参数问题。
+
 ## 为什么两种连接都要
 
 ```text

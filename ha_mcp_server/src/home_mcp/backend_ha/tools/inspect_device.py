@@ -1,43 +1,15 @@
 """inspect_device：读一台设备的状态与可用动作（含参数范围）。
 
-动作清单来自契约的 ACTIONS_BY_KIND；参数范围优先取设备自报值
-（实测 climate 带 min_temp=7.0 / max_temp=32.0 / target_temp_step=0.5）。
+动作清单与范围由 mapping.device_actions 算（与 execute_action 共用同一份），
+状态是六个字段（on / mode / target / level / position / current）。
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from ...contract import action_payload, actions_for_kind
 from ...errors import ErrorCode, HomeMcpError
-from ..mapping import summarize_state
-
-
-def _apply_device_ranges(
-    kind: str, actions: list[dict[str, Any]], summary: dict[str, Any]
-) -> list[dict[str, Any]]:
-    """用设备自报的范围覆盖契约默认值，让模型看到这台设备真实可用的区间。"""
-
-    if kind == "climate":
-        low = summary.get("min_temperature")
-        high = summary.get("max_temperature")
-        step = summary.get("temperature_step")
-    elif kind == "fan":
-        low, high, step = 0, 100, summary.get("percentage_step")
-    else:
-        return actions
-
-    for action in actions:
-        for spec in action.get("params", {}).values():
-            if spec.get("type") not in ("number", "integer"):
-                continue
-            if low is not None:
-                spec["minimum"] = low
-            if high is not None:
-                spec["maximum"] = high
-            if step is not None:
-                spec["step"] = step
-    return actions
+from ..mapping import device_actions, summarize_state
 
 
 def run(context: Any, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -57,12 +29,11 @@ def run(context: Any, arguments: dict[str, Any]) -> dict[str, Any]:
 
     state = context.client.get_state(row.entity_id)
     summary = summarize_state(row.kind, state)
-    actions = [action_payload(action) for action in actions_for_kind(row.kind)]
     return {
         "device_id": row.device_id,
         "entity_id": row.entity_id,
         "area_id": row.area_id,
         "kind": row.kind,
         "state": summary,
-        "actions": _apply_device_ranges(row.kind, actions, summary),
+        "actions": device_actions(row.kind, state),
     }

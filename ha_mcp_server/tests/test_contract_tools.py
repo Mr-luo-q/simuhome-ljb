@@ -27,13 +27,15 @@ from home_mcp.backend_ha.mapping import (                              # noqa: E
     split_unique_id,
 )
 from home_mcp.backend_ha.tools import (                                # noqa: E402
+    check_goal,
+    execute_action,
     inspect_device,
     inspect_room,
     observe_home,
     query_events,
 )
 from home_mcp.runtime import ConfigError, load_config                  # noqa: E402
-from tests.fake_ha import AREAS, DEVICES, ENTITIES, FakeRestClient     # noqa: E402
+from tests.fake_ha import AREAS, DEVICES, ENTITIES, STATES, FakeRestClient   # noqa: E402
 
 
 class FixtureContext:
@@ -42,7 +44,10 @@ class FixtureContext:
     def __init__(self) -> None:
         self.client = FakeRestClient()
         self.view = build_view(ENTITIES, DEVICES, AREAS)
-        self.config = {"events": {"exclude_entities": ["sensor.simuhome_virtual_time"]}}
+        self.config = {
+            "events": {"exclude_entities": ["sensor.simuhome_virtual_time"]},
+            "execution": {"verify_delay_ms": 10, "verify_attempts": 2},   # 测试里不等 500 ms
+        }
 
 
 def test_contract_shape() -> None:
@@ -119,11 +124,11 @@ def test_call_tool_envelope() -> None:
 
 
 def test_stubs_are_not_implemented() -> None:
-    """M2 之后仍未实现的四个工具必须返回 NOT_IMPLEMENTED。"""
+    """M3 之后仍未实现的两个工具（time_control / memory）必须返回 NOT_IMPLEMENTED。"""
 
     from home_mcp.backend_ha.tools import MODULES
 
-    pending = ("execute_action", "time_control", "check_goal", "memory")
+    pending = ("time_control", "memory")
     for name in pending:
         try:
             MODULES[name].run(None, {})
@@ -196,9 +201,9 @@ def test_inspect_device_on_fixture() -> None:
 
     ac = inspect_device.run(context, {"device_id": "living_room_ac"})
     assert ac["kind"] == "climate" and ac["area_id"] == "living_room"
-    assert ac["state"]["mode"] == "off" and ac["state"]["current_temperature"] == 26.0
+    assert ac["state"]["mode"] == "off" and ac["state"]["current"] == 26.0
     actions = {item["action"]: item for item in ac["actions"]}
-    assert set(actions) == {"set_mode", "set_temperature"}
+    assert set(actions) == {"turn_on", "turn_off", "toggle", "set_mode", "set_temperature"}
     temp_param = actions["set_temperature"]["params"]["value"]
     assert (temp_param["minimum"], temp_param["maximum"], temp_param["step"]) == (7.0, 32.0, 0.5)
     assert actions["set_mode"]["params"]["mode"]["enum"] == ["off", "cool", "heat"]
@@ -209,8 +214,15 @@ def test_inspect_device_on_fixture() -> None:
 
     fan = inspect_device.run(context, {"device_id": "kitchen_fan"})
     fan_actions = {item["action"]: item for item in fan["actions"]}
-    assert set(fan_actions) == {"turn_on", "turn_off", "set_percentage"}
+    assert set(fan_actions) == {"turn_on", "turn_off", "toggle", "set_percentage"}
     assert fan_actions["set_percentage"]["params"]["value"]["maximum"] == 100
+
+    # C 口径：每类设备的动作数必须是 3 / 5 / 4
+    assert (
+        len(tv["actions"]),
+        len(ac["actions"]),
+        len(fan["actions"]),
+    ) == (3, 5, 4), "动作数应为 switch 3 / climate 5 / fan 4"
 
     try:
         inspect_device.run(context, {"device_id": "no_such_device"})
@@ -252,6 +264,137 @@ def test_query_events_on_fixture() -> None:
             raise AssertionError(f"参数 {bad} 应当报 BAD_REQUEST")
 
 
+def test_execute_action_on_fixture() -> None:
+    """execute_action 的四道闸门与三类设备的写路径（离线，假 HA 可回读）。"""
+
+    context = FixtureContext()
+
+    opened = execute_action.run(context, {"device_id": "living_room_tv", "action": "turn_on"})
+    assert opened["verified"] is True and opened["state_after"]["on"] is True, opened
+    assert opened["steps"] == [
+        {"target": "switch.simuhome_living_room_tv", "service": "switch.turn_on", "data": {}}
+    ], opened["steps"]
+
+    closed = execute_action.run(context, {"device_id": "living_room_tv", "action": "turn_off"})
+    assert closed["state_after"]["on"] is False
+
+    mode = execute_action.run(
+        context, {"device_id": "living_room_ac", "action": "set_mode", "params": {"mode": "cool"}}
+    )
+    assert mode["verified"] is True and mode["state_after"]["mode"] == "cool"
+
+    temp = execute_action.run(
+        context,
+        {"device_id": "living_room_ac", "action": "set_temperature", "params": {"value": 25}},
+    )
+    assert temp["verified"] is True and temp["state_after"]["target"] == 25.0
+
+    percent = execute_action.run(
+        context, {"device_id": "kitchen_fan", "action": "set_percentage", "params": {"value": 60}}
+    )
+    assert percent["verified"] is True and percent["state_after"]["level"] == 60
+
+    # 越界：本地就拦下，不发给后端
+    for bad in (
+        {"device_id": "living_room_ac", "action": "set_temperature", "params": {"value": 40}},
+        {"device_id": "kitchen_fan", "action": "set_percentage", "params": {"value": 120}},
+        {"device_id": "living_room_ac", "action": "set_mode", "params": {"mode": "turbo"}},
+        {"device_id": "living_room_tv", "action": "turn_on", "params": {"value": 1}},
+    ):
+        try:
+            execute_action.run(context, bad)
+        except HomeMcpError as err:
+            assert err.code is ErrorCode.BAD_REQUEST, bad
+        else:
+            raise AssertionError(f"参数 {bad} 应当报 BAD_REQUEST")
+
+    # 动作不支持：对开关发 set_temperature
+    try:
+        execute_action.run(
+            context, {"device_id": "living_room_tv", "action": "set_temperature", "params": {"value": 25}}
+        )
+    except HomeMcpError as err:
+        assert err.code is ErrorCode.UNSUPPORTED_ACTION
+    else:
+        raise AssertionError("开关不支持 set_temperature")
+
+    # 设备不存在
+    try:
+        execute_action.run(context, {"device_id": "ghost", "action": "turn_on"})
+    except HomeMcpError as err:
+        assert err.code is ErrorCode.UNKNOWN_DEVICE
+    else:
+        raise AssertionError("不存在的设备应当报 UNKNOWN_DEVICE")
+
+    # 实体掉线：状态是 unavailable 时必须拒绝，不能发命令
+    offline_states = [dict(item) for item in STATES]
+    for item in offline_states:
+        if item["entity_id"] == "switch.simuhome_living_room_tv":
+            item["state"] = "unavailable"
+    offline = FixtureContext()
+    offline.client = FakeRestClient(states=offline_states)
+    try:
+        execute_action.run(offline, {"device_id": "living_room_tv", "action": "turn_on"})
+    except HomeMcpError as err:
+        assert err.code is ErrorCode.DEVICE_UNAVAILABLE
+    else:
+        raise AssertionError("实体 unavailable 时应当报 DEVICE_UNAVAILABLE")
+
+
+def test_check_goal_on_fixture() -> None:
+    """check_goal：目标条件 + 保持条件；目标解析失败报 BAD_TARGET。"""
+
+    context = FixtureContext()
+    data = check_goal.run(
+        context,
+        {
+            "conditions": [
+                {"target": "living_room.temperature", "op": "lt", "value": 24},
+                {"target": "living_room.humidity", "op": "gt", "value": 40},
+            ],
+            "keep": [{"target": "living_room.pm10", "op": "lt", "value": 30}],
+        },
+    )
+    goals = {item["target"]: item for item in data["goals"]}
+    assert goals["living_room.temperature"]["pass"] is False
+    assert goals["living_room.temperature"]["actual"] == 26
+    assert goals["living_room.humidity"]["pass"] is True
+    assert data["keep"][0]["pass"] is True and data["all_pass"] is False
+
+    # 设备字段也能当目标：客厅空调当前是 off
+    device_goal = check_goal.run(
+        context,
+        {"conditions": [{"target": "living_room_ac.on", "op": "eq", "value": False}]},
+    )
+    assert device_goal["all_pass"] is True
+
+    # 目标解析不了
+    for bad in (
+        {"conditions": [{"target": "garage.temperature", "op": "lt", "value": 24}]},
+        {"conditions": [{"target": "living_room_ac.nonsense", "op": "lt", "value": 1}]},
+        {"conditions": [{"target": "living_room", "op": "lt", "value": 1}]},
+    ):
+        try:
+            check_goal.run(context, bad)
+        except HomeMcpError as err:
+            assert err.code is ErrorCode.BAD_TARGET, bad
+        else:
+            raise AssertionError(f"{bad} 应当报 BAD_TARGET")
+
+    # 结构不对 / 操作符不支持
+    for bad in (
+        {"conditions": []},
+        {"conditions": [{"target": "living_room.temperature", "op": "~", "value": 24}]},
+        {"conditions": [{"target": "living_room.temperature", "op": "lt"}]},
+    ):
+        try:
+            check_goal.run(context, bad)
+        except HomeMcpError as err:
+            assert err.code is ErrorCode.BAD_REQUEST, bad
+        else:
+            raise AssertionError(f"{bad} 应当报 BAD_REQUEST")
+
+
 def test_conditions_and_config() -> None:
     """条件求值与 ${VAR} 配置替换。"""
 
@@ -288,6 +431,8 @@ def main() -> int:
         test_inspect_room_on_fixture,
         test_inspect_device_on_fixture,
         test_query_events_on_fixture,
+        test_execute_action_on_fixture,
+        test_check_goal_on_fixture,
         test_conditions_and_config,
     ]
     failed = 0
