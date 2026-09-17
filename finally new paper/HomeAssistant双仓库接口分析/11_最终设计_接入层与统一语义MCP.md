@@ -358,7 +358,9 @@ NOT_IMPLEMENTED     该工具本阶段还没实现（M1 会出现，逐步消失
           （它会返回 homeassistant.reload_config_entry 这类管理员服务，必须剔除）；
           参数 schema 从 REST /api/services 取；supported_features 对 switch 为 null，不用
 动作      规范动作 → HA 服务；无对应服务返回 UNSUPPORTED_ACTION；
-          参数超出设备范围（如温度 40°C）由 HA/SimuHome 侧拒绝，映射为 BAD_REQUEST
+          参数超出设备范围先在本地校验：用设备自报的 min/max（如空调 7~32）比对，
+          超界直接 BAD_REQUEST。实测教训：把 40°C 发给 HA 的 climate.set_temperature，
+          HA 返回的是 500 Internal Server Error 而不是 400，不能指望它兜住参数校验
 目标      check_goal 的目标命名空间：<room>.<metric>（环境量）、<device_id>.<attribute>（设备属性）
 事件      query_events 走 logbook，默认排除 sensor.simuhome_virtual_time
 可用性    调用前读状态，见 5.3
