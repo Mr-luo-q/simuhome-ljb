@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1300 920" width="1300" height="920" font-family="Microsoft YaHei, Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6b8cae"/>
+    </marker>
+    <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#c08a2e"/>
+    </marker>
+    <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#b9c2cc"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1300" height="920" fill="#ffffff"/>
+
+  <text x="50" y="46" font-size="26" font-weight="700" fill="#1f2d3d">MCP：五个模块按连接分三层，Server 内部再分三层</text>
+  <text x="50" y="74" font-size="15" fill="#6b7a8d">左边竖条是 A / B / C 三层的分组；③ 与 ④ 各占一条横带；⑤ 里面是 a / b / c 三个实现层</text>
+
+  <line x1="40" y1="100" x2="40" y2="252" stroke="#8fb8e0" stroke-width="3"/>
+  <text x="30" y="205" font-size="14" font-weight="700" fill="#4a7ba6" transform="rotate(-90 30 205)">A 宿主侧</text>
+  <line x1="40" y1="270" x2="40" y2="472" stroke="#dfb15e" stroke-width="3"/>
+  <text x="30" y="425" font-size="14" font-weight="700" fill="#8a6d3b" transform="rotate(-90 30 425)">B 标准协议</text>
+  <line x1="40" y1="490" x2="40" y2="830" stroke="#7cb389" stroke-width="3"/>
+  <text x="30" y="700" font-size="14" font-weight="700" fill="#2f5a37" transform="rotate(-90 30 700)">C 我们写的</text>
+
+  <rect x="70" y="100" width="910" height="152" rx="14" fill="#eef5fd" stroke="#8fb8e0" stroke-width="2"/>
+  <text x="95" y="132" font-size="20" font-weight="700" fill="#1f2d3d">① Host 模型宿主（应用）</text>
+
+  <rect x="95" y="148" width="380" height="72" rx="10" fill="#ffffff" stroke="#a9c7e6" stroke-width="1.5"/>
+  <text x="115" y="176" font-size="16" font-weight="700" fill="#1f2d3d">模型（LLM）</text>
+  <text x="115" y="200" font-size="13" fill="#41576d">决定调哪个工具（tools）</text>
+
+  <rect x="505" y="148" width="450" height="72" rx="10" fill="#d9e9fa" stroke="#7fa9d6" stroke-width="1.5"/>
+  <text x="525" y="176" font-size="16" font-weight="700" fill="#1f2d3d">② Client 连接器（在 Host 内，SDK 提供）</text>
+  <text x="525" y="200" font-size="13" fill="#41576d">与 Server A 一对一，本项目的唯一连接</text>
+
+  <text x="95" y="240" font-size="13" fill="#6b7a8d">Application 管 resources（给哪些上下文）；User 管 prompts（下指令、选模板）</text>
+
+  <rect x="70" y="270" width="910" height="92" rx="12" fill="#fff8e6" stroke="#dfb15e" stroke-width="2"/>
+  <text x="95" y="304" font-size="19" font-weight="700" fill="#1f2d3d">③ 传输层</text>
+  <text x="95" y="332" font-size="14" fill="#8a6d3b">管“怎么送”：stdio 或 Streamable HTTP；会话标识 Mcp-Session-Id；OAuth 2.1 / Bearer 鉴权</text>
+
+  <rect x="70" y="378" width="910" height="94" rx="12" fill="#ffefd4" stroke="#d9a04a" stroke-width="2"/>
+  <text x="95" y="412" font-size="19" font-weight="700" fill="#1f2d3d">④ 协议层</text>
+  <text x="95" y="440" font-size="14" fill="#8a6d3b">管“说什么”：initialize 与能力协商、JSON-RPC 请求 / 响应 / 通知、进度、取消、分页</text>
+
+  <line x1="780" y1="256" x2="780" y2="486" stroke="#6b8cae" stroke-width="2.5" marker-end="url(#ar)"/>
+  <line x1="840" y1="486" x2="840" y2="256" stroke="#c08a2e" stroke-width="2" stroke-dasharray="7 5" marker-end="url(#ar2)"/>
+  <line x1="900" y1="486" x2="900" y2="256" stroke="#c08a2e" stroke-width="2" stroke-dasharray="2 5" marker-end="url(#ar2)"/>
+  <text x="768" y="370" font-size="13" fill="#3f6188" transform="rotate(-90 768 370)">请求</text>
+  <text x="828" y="390" font-size="13" fill="#8a6d3b" transform="rotate(-90 828 390)">反向请求</text>
+  <text x="888" y="370" font-size="13" fill="#8a6d3b" transform="rotate(-90 888 370)">通知</text>
+
+  <rect x="70" y="490" width="910" height="340" rx="14" fill="#eef8f0" stroke="#7cb389" stroke-width="2.5"/>
+  <text x="95" y="524" font-size="21" font-weight="700" fill="#1f2d3d">⑤ Server A：本项目的 MCP</text>
+  <text x="450" y="524" font-size="13" fill="#5b7a5f">只有这一块由我们实现；下面 a / b / c 就是它的内部结构</text>
+
+  <rect x="95" y="540" width="860" height="72" rx="10" fill="#f4fbf5" stroke="#a9cfae" stroke-width="1.5"/>
+  <text x="115" y="568" font-size="16" font-weight="700" fill="#1f2d3d">a 协议壳（薄）</text>
+  <text x="115" y="594" font-size="13" fill="#3f5747">工具注册、参数 schema 校验、错误码、日志与进度、两种传输的选择</text>
+
+  <rect x="95" y="622" width="860" height="72" rx="10" fill="#f4fbf5" stroke="#a9cfae" stroke-width="1.5"/>
+  <text x="115" y="650" font-size="16" font-weight="700" fill="#1f2d3d">b 语义层（中等）</text>
+  <text x="115" y="676" font-size="13" fill="#3f5747">device_id ↔ entity_id、动作 → domain/service、房间聚合、条件求值、时间语义标注</text>
+
+  <rect x="95" y="704" width="860" height="72" rx="10" fill="#f4fbf5" stroke="#a9cfae" stroke-width="1.5"/>
+  <text x="115" y="732" font-size="16" font-weight="700" fill="#1f2d3d">c 融合层（厚）</text>
+  <text x="115" y="758" font-size="13" fill="#3f5747">HA REST + WebSocket、注册表缓存、事件订阅；本稿只做到“外挂”这一档</text>
+
+  <text x="95" y="806" font-size="13" fill="#5b7a5f">本稿：a 全做；b 做四项（跳过拓扑）；c 只做外挂，暂不做进程内集成</text>
+
+  <rect x="1010" y="270" width="250" height="250" rx="12" fill="#fbfbfb" stroke="#c9c9c9" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <text x="1030" y="300" font-size="15" font-weight="700" fill="#8a97a5">其他 Server（扇出示意）</text>
+  <text x="1030" y="322" font-size="12" fill="#a7b0b8">本项目不用，只为体现拓扑</text>
+  <rect x="1030" y="340" width="210" height="66" rx="8" fill="#ffffff" stroke="#e0e0e0" stroke-width="1.5"/>
+  <text x="1046" y="368" font-size="14" font-weight="700" fill="#8a97a5">Server B（文件）</text>
+  <text x="1046" y="390" font-size="12" fill="#a7b0b8">读写文件</text>
+  <rect x="1030" y="420" width="210" height="66" rx="8" fill="#ffffff" stroke="#e0e0e0" stroke-width="1.5"/>
+  <text x="1046" y="448" font-size="14" font-weight="700" fill="#8a97a5">Server C（数据库）</text>
+  <text x="1046" y="470" font-size="12" fill="#a7b0b8">查询数据</text>
+  <polyline points="980,200 995,200 995,330 1008,330" fill="none" stroke="#b9c2cc" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#ar3)"/>
+  <text x="984" y="192" font-size="12" fill="#a7b0b8">扇出</text>
+
+  <rect x="1010" y="540" width="250" height="290" rx="12" fill="#fbfcfe" stroke="#c9d4de" stroke-width="1.5"/>
+  <text x="1030" y="570" font-size="16" font-weight="700" fill="#1f2d3d">箭头含义</text>
+  <text x="1030" y="602" font-size="13" fill="#41576d">↓ 实线</text>
+  <text x="1030" y="622" font-size="12" fill="#8a97a5">Client → Server 请求</text>
+  <text x="1030" y="652" font-size="13" fill="#8a6d3b">↑ 虚线</text>
+  <text x="1030" y="672" font-size="12" fill="#8a97a5">Server → Client 反向请求</text>
+  <text x="1030" y="702" font-size="13" fill="#8a6d3b">↑ 点线</text>
+  <text x="1030" y="722" font-size="12" fill="#8a97a5">Server → Client 通知</text>
+  <text x="1030" y="752" font-size="13" fill="#41576d">↓ 点线 / ↔ 双向</text>
+  <text x="1030" y="772" font-size="12" fill="#8a97a5">取消；initialize 与能力协商</text>
+  <text x="1030" y="808" font-size="12" fill="#a7b0b8">虚线部分本稿不做，留二期</text>
+
+  <text x="70" y="876" font-size="14" fill="#6b7a8d">A 层（宿主侧）与 B 层（标准协议）都不用我们写；C 层里 a 薄、b 中等、c 最厚，越往下越依赖被控软件的内部语义。</text>
+  <text x="70" y="902" font-size="14" fill="#6b7a8d">本稿范围：③ 与 ④ 交给 SDK，我们只写 a 全部 + b 四项 + c 的外挂档。</text>
+</svg>

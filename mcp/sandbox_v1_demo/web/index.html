@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sandbox V1 Browser Demo</title>
+  <style>
+    :root {
+      --bg: #f4f1ea;
+      --panel: #fffaf2;
+      --ink: #1f2937;
+      --muted: #6b7280;
+      --accent: #b45309;
+      --line: #d6d3d1;
+      --room-fill: #fef3c7;
+      --room-alt: #e0f2fe;
+      --device: #2563eb;
+      --human: #dc2626;
+      --ok: #15803d;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, #f7f4ed 0%, #efe7db 100%);
+      color: var(--ink);
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    .page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .hero {
+      margin-bottom: 18px;
+    }
+
+    .hero h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 20px 0 16px;
+    }
+
+    button {
+      border: 1px solid #d4a373;
+      background: #fff7ed;
+      color: #92400e;
+      padding: 10px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    button:hover {
+      background: #ffedd5;
+    }
+
+    .toolbar-note {
+      margin: 0 0 18px;
+      color: var(--muted);
+      line-height: 1.7;
+      background: rgba(255,255,255,0.68);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px 14px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 18px;
+    }
+
+    .panel {
+      background: rgba(255, 250, 242, 0.9);
+      border: 1px solid rgba(180, 83, 9, 0.15);
+      border-radius: 18px;
+      padding: 16px;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.04);
+    }
+
+    .panel h2 {
+      margin: 0 0 12px;
+      font-size: 18px;
+    }
+
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .meta-card {
+      background: rgba(255,255,255,0.7);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+
+    .meta-card .label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    .meta-card .value {
+      font-weight: 700;
+      font-size: 18px;
+    }
+
+    canvas {
+      width: 100%;
+      max-width: 100%;
+      background: #fcfbf7;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      display: block;
+    }
+
+    .log {
+      white-space: pre-wrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      background: rgba(255,255,255,0.72);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      min-height: 120px;
+      overflow: auto;
+    }
+
+    .timeline {
+      position: relative;
+      margin-top: 10px;
+      padding-left: 18px;
+    }
+
+    .timeline::before {
+      content: "";
+      position: absolute;
+      left: 7px;
+      top: 2px;
+      bottom: 2px;
+      width: 2px;
+      background: #d6d3d1;
+    }
+
+    .timeline-item {
+      position: relative;
+      margin-bottom: 12px;
+      padding: 10px 12px 10px 14px;
+      background: rgba(255,255,255,0.72);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+
+    .timeline-item::before {
+      content: "";
+      position: absolute;
+      left: -15px;
+      top: 14px;
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: #9ca3af;
+      border: 2px solid #fffaf2;
+    }
+
+    .timeline-item.pause::before {
+      background: #dc2626;
+    }
+
+    .timeline-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 4px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .timeline-body {
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .legend span::before {
+      content: "";
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      margin-right: 6px;
+      border-radius: 999px;
+      vertical-align: middle;
+    }
+
+    .legend .human::before { background: var(--human); }
+    .legend .device::before { background: var(--device); }
+    .legend .goal::before { background: var(--ok); }
+
+    @media (max-width: 920px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="hero">
+      <h1>Sandbox V1 浏览器 2D Demo</h1>
+      <p>这个页面展示的是我们目前的首版沙箱原型：房间、人物、设备、环境变量、暂停点，以及基于暂停点的 Gym-friendly step 语义。</p>
+    </div>
+
+    <div class="toolbar">
+      <button id="resetBtn">1. 重置场景</button>
+      <button id="coolBtn">2. 开启空调，并推进到下一个暂停点</button>
+      <button id="noopBtn">3. 不做动作，继续推进到下一个暂停点</button>
+    </div>
+    <div class="toolbar-note">
+      这三个按钮对应的是一个“暂停点到暂停点”的沙箱流程，而不是普通网页按钮。
+      `重置场景` 会回到初始世界；
+      `开启空调，并推进到下一个暂停点` 表示模型在当前决策点执行一个动作，然后时间控制核自动把世界推进到下一次需要停下来的时刻；
+      `不做动作，继续推进到下一个暂停点` 则表示本轮模型选择 no-op，只看世界后面会发生什么。
+    </div>
+
+    <div class="grid">
+      <div class="panel">
+        <h2>2D 视图</h2>
+        <div class="meta">
+          <div class="meta-card">
+            <span class="label">Tick</span>
+            <span class="value" id="tickValue">-</span>
+          </div>
+          <div class="meta-card">
+            <span class="label">Reward</span>
+            <span class="value" id="rewardValue">-</span>
+          </div>
+          <div class="meta-card">
+            <span class="label">Terminated</span>
+            <span class="value" id="terminatedValue">-</span>
+          </div>
+          <div class="meta-card">
+            <span class="label">Truncated</span>
+            <span class="value" id="truncatedValue">-</span>
+          </div>
+        </div>
+        <canvas id="worldCanvas" width="760" height="440"></canvas>
+        <div class="legend">
+          <span class="human">人物</span>
+          <span class="device">设备</span>
+          <span class="goal">目标温度区域</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>状态与事件</h2>
+        <div class="meta">
+          <div class="meta-card">
+            <span class="label">客厅温度</span>
+            <span class="value" id="tempValue">-</span>
+          </div>
+          <div class="meta-card">
+            <span class="label">客厅湿度</span>
+            <span class="value" id="humidityValue">-</span>
+          </div>
+          <div class="meta-card">
+            <span class="label">人物位置</span>
+            <span class="value" id="humanValue">-</span>
+          </div>
+          <div class="meta-card">
+            <span class="label">空调状态</span>
+            <span class="value" id="acValue">-</span>
+          </div>
+        </div>
+        <h2 style="margin-top:16px;">最后一个暂停事件</h2>
+        <div id="eventBox" class="log">-</div>
+        <h2 style="margin-top:16px;">最近事件流</h2>
+        <div id="eventsBox" class="log">-</div>
+        <h2 style="margin-top:16px;">时间轴 / 事件轴</h2>
+        <div id="timelineBox" class="timeline"></div>
+        <h2 style="margin-top:16px;">文本视图</h2>
+        <div id="textView" class="log">-</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      observation: null,
+      reward: null,
+      terminated: false,
+      truncated: false,
+      info: null,
+    };
+
+    const canvas = document.getElementById("worldCanvas");
+    const ctx = canvas.getContext("2d");
+
+    async function apiPost(path, payload = {}) {
+      const response = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+      return response.json();
+    }
+
+    async function resetEnv() {
+      const payload = await apiPost("/api/reset");
+      state.observation = payload.observation;
+      state.reward = payload.reward;
+      state.terminated = payload.terminated;
+      state.truncated = payload.truncated;
+      state.info = payload.info;
+      renderAll();
+    }
+
+    async function stepEnv(action) {
+      const payload = await apiPost("/api/step", { action });
+      state.observation = payload.observation;
+      state.reward = payload.reward;
+      state.terminated = payload.terminated;
+      state.truncated = payload.truncated;
+      state.info = payload.info;
+      renderAll();
+    }
+
+    function renderAll() {
+      renderMeta();
+      renderEvent();
+      renderTimeline();
+      renderCanvas();
+    }
+
+    function renderMeta() {
+      const obs = state.observation;
+      const info = state.info || {};
+      document.getElementById("tickValue").textContent = obs?.tick ?? "-";
+      document.getElementById("rewardValue").textContent = state.reward ?? "-";
+      document.getElementById("terminatedValue").textContent = String(state.terminated);
+      document.getElementById("truncatedValue").textContent = String(state.truncated);
+      document.getElementById("tempValue").textContent = `${obs?.living_room_temperature_c ?? "-"} C`;
+      document.getElementById("humidityValue").textContent = `${obs?.living_room_humidity_pct ?? "-"} %`;
+      document.getElementById("humanValue").textContent = obs ? `${obs.human_room_id} / ${obs.human_anchor_name}` : "-";
+      document.getElementById("acValue").textContent = obs ? `${obs.ac_is_on ? "on" : "off"} / ${obs.ac_mode}` : "-";
+      document.getElementById("textView").textContent = info.text_view || "-";
+    }
+
+    function renderEvent() {
+      document.getElementById("eventBox").textContent = JSON.stringify(state.info?.last_event ?? null, null, 2);
+      document.getElementById("eventsBox").textContent = JSON.stringify(state.info?.recent_events ?? [], null, 2);
+    }
+
+    function renderTimeline() {
+      const timeline = document.getElementById("timelineBox");
+      const events = state.info?.recent_events ?? [];
+      if (!events.length) {
+        timeline.innerHTML = "<div class='timeline-item'><div class='timeline-body'>当前还没有事件。</div></div>";
+        return;
+      }
+
+      timeline.innerHTML = events.map((event) => {
+        const pauseClass = event.pause_reason ? "timeline-item pause" : "timeline-item";
+        const pauseLabel = event.pause_reason ? `pause: ${event.pause_reason}` : "normal";
+        return `
+          <div class="${pauseClass}">
+            <div class="timeline-head">
+              <span>tick ${event.tick}</span>
+              <span>${event.event_type}</span>
+              <span>${pauseLabel}</span>
+            </div>
+            <div class="timeline-body">${event.summary}</div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderCanvas() {
+      const obs = state.observation;
+      if (!obs) return;
+      const world = obs.world_state;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const rooms = Object.values(world.rooms);
+      const roomBoxes = {};
+      let x = 30;
+      const y = 70;
+      const scale = 44;
+
+      rooms.forEach((room, index) => {
+        const width = room.width * scale;
+        const height = room.height * scale;
+        const rect = { x, y: y + index * 8, width, height };
+        roomBoxes[room.room_id] = rect;
+
+        ctx.fillStyle = index % 2 === 0 ? "#fef3c7" : "#e0f2fe";
+        ctx.strokeStyle = "#b45309";
+        ctx.lineWidth = 2;
+        ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+        ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+
+        ctx.fillStyle = "#111827";
+        ctx.font = "bold 16px Segoe UI";
+        ctx.fillText(room.name, rect.x + 10, rect.y + 22);
+
+        const env = world.env_by_room[room.room_id];
+        ctx.fillStyle = "#6b7280";
+        ctx.font = "12px Segoe UI";
+        ctx.fillText(`T ${env.temperature_c.toFixed(1)}C`, rect.x + 10, rect.y + 40);
+        ctx.fillText(`H ${env.humidity_pct.toFixed(1)}%`, rect.x + 10, rect.y + 56);
+        ctx.fillText(`L ${env.light_lux.toFixed(0)} lux`, rect.x + 10, rect.y + 72);
+
+        if (room.room_id === "living_room") {
+          ctx.fillStyle = "rgba(21, 128, 61, 0.1)";
+          ctx.fillRect(rect.x + rect.width - 96, rect.y + 10, 80, 26);
+          ctx.strokeStyle = "#15803d";
+          ctx.strokeRect(rect.x + rect.width - 96, rect.y + 10, 80, 26);
+          ctx.fillStyle = "#166534";
+          ctx.font = "12px Segoe UI";
+          ctx.fillText("goal <= 24.8C", rect.x + rect.width - 88, rect.y + 27);
+        }
+
+        x += width + 34;
+      });
+
+      Object.values(world.devices).forEach((device) => {
+        const room = world.rooms[device.room_id];
+        const roomBox = roomBoxes[device.room_id];
+        const anchor = room.anchors[device.anchor_name];
+        const px = roomBox.x + anchor.x * scale;
+        const py = roomBox.y + anchor.y * scale;
+
+        ctx.fillStyle = "#2563eb";
+        ctx.beginPath();
+        ctx.rect(px - 8, py - 8, 16, 16);
+        ctx.fill();
+        ctx.fillStyle = "#1e3a8a";
+        ctx.font = "12px Segoe UI";
+        const status = device.state.is_on ? "on" : "off";
+        ctx.fillText(`${device.name} (${status})`, px + 12, py + 4);
+      });
+
+      Object.values(world.humans).forEach((human) => {
+        const roomBox = roomBoxes[human.room_id];
+        const px = roomBox.x + human.position_x * scale;
+        const py = roomBox.y + human.position_y * scale;
+
+        if (human.trajectory_points && human.trajectory_points.length > 1) {
+          ctx.strokeStyle = "rgba(220, 38, 38, 0.5)";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          let started = false;
+          human.trajectory_points.forEach((point) => {
+            const pointRoomBox = roomBoxes[point.room_id];
+            if (!pointRoomBox) return;
+            const tx = pointRoomBox.x + point.x * scale;
+            const ty = pointRoomBox.y + point.y * scale;
+            if (!started) {
+              ctx.moveTo(tx, ty);
+              started = true;
+            } else {
+              ctx.lineTo(tx, ty);
+            }
+          });
+          ctx.stroke();
+        }
+
+        ctx.fillStyle = "#dc2626";
+        ctx.beginPath();
+        ctx.arc(px, py, 9, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#7f1d1d";
+        ctx.font = "12px Segoe UI";
+        ctx.fillText(`${human.name} / ${human.activity_label}`, px + 14, py + 4);
+      });
+    }
+
+    document.getElementById("resetBtn").addEventListener("click", () => resetEnv());
+    document.getElementById("coolBtn").addEventListener("click", () => stepEnv({
+      action_type: "set_device_state",
+      device_id: "ac_living_room",
+      is_on: true,
+      mode: "cool",
+      target_temperature_c: 24.0
+    }));
+    document.getElementById("noopBtn").addEventListener("click", () => stepEnv({ action_type: "noop" }));
+
+    resetEnv().catch((error) => {
+      console.error(error);
+      alert(`初始化失败: ${error.message}`);
+    });
+  </script>
+</body>
+</html>
