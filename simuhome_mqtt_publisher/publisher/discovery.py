@@ -21,7 +21,7 @@ def _availability(prefix: str) -> dict[str, Any]:
     }
 
 
-def _device_block(identifier: str, name: str, model: str, area: str) -> dict[str, Any]:
+def _device_block(identifier: str, name: str, model: str, area: str | None = None) -> dict[str, Any]:
     """设备块。
 
     identifiers 必须是「单个字符串的列表」：写成 ["simuhome", device_id] 会被当成
@@ -29,13 +29,37 @@ def _device_block(identifier: str, name: str, model: str, area: str) -> dict[str
     （第一版就踩了这个坑，实测 24 个实体全挂在一个设备上）。
     """
 
-    return {
+    block: dict[str, Any] = {
         "identifiers": [f"simuhome_{identifier}"],
         "name": name,
         "manufacturer": MANUFACTURER,
         "model": model,
-        "suggested_area": area,
     }
+    if area:
+        block["suggested_area"] = area
+    return block
+
+
+def virtual_time_topic(discovery_prefix: str) -> str:
+    """虚拟时间传感器的 discovery 主题。"""
+
+    return f"{discovery_prefix}/sensor/simuhome_virtual_time/config"
+
+
+def virtual_time_config(prefix: str) -> dict[str, Any]:
+    """虚拟时间传感器：把 SimuHome 的虚拟时钟暴露成 HA 实体（不属于任何房间）。"""
+
+    config: dict[str, Any] = {
+        "name": "虚拟时间",
+        "object_id": "simuhome_virtual_time",
+        "unique_id": "simuhome_virtual_time",
+        "state_topic": f"{prefix}/time",
+        "icon": "mdi:clock-outline",
+        "device": _device_block("simulator", "SimuHome", "virtual_home"),
+        "origin": ORIGIN,
+    }
+    config.update(_availability(prefix))
+    return config
 
 
 def switch_topic(discovery_prefix: str, device_id: str) -> str:

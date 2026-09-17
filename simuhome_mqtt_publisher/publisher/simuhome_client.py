@@ -38,6 +38,12 @@ class SimuHomeClient:
 
         return self._request("GET", "/home/state").get("data") or {}
 
+    def get_virtual_time(self) -> str | None:
+        """读当前虚拟时间（SimuHome 返回 data.now，形如 2025-08-23 18:26:57）。"""
+
+        data = self._request("GET", "/time").get("data") or {}
+        return data.get("now") if isinstance(data, dict) else None
+
     def get_device_attributes(self, device_id: str) -> dict:
         """读单台设备的全部属性。"""
 

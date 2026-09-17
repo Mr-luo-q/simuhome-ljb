@@ -7,6 +7,7 @@
 ```text
 输入   设备 id / 房间 id / 指标定义 / 主题前缀
 输出   (discovery 主题, 配置 dict) 两类：switch 与 sensor
+       外加一个不属于任何房间的虚拟时间传感器 virtual_time_config()
 ```
 
 ## 关键字段

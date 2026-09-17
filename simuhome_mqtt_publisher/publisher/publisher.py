@@ -46,6 +46,7 @@ class Publisher:
         self._known_devices: dict[str, dict[str, Any]] = {}
         self._published_metrics: dict[str, float] = {}
         self._published_switches: dict[str, str] = {}
+        self._published_time: str | None = None
         self._last_pub_at: dict[str, float] = {}
         self._last_command_at = 0.0
         self._need_full_discovery = True
@@ -115,6 +116,11 @@ class Publisher:
                     room_id, meta["name"], metric, meta["area"], self.prefix, self.disc_prefix
                 )
                 self.mqtt.publish(topic, json.dumps(payload, ensure_ascii=False), retain=True)
+        self.mqtt.publish(
+            discovery.virtual_time_topic(self.disc_prefix),
+            json.dumps(discovery.virtual_time_config(self.prefix), ensure_ascii=False),
+            retain=True,
+        )
         for device_id, info in devices.items():
             topic = discovery.switch_topic(self.disc_prefix, device_id)
             payload = discovery.switch_config(
@@ -186,6 +192,16 @@ class Publisher:
                 continue
             self.mqtt.publish(f"{self.prefix}/{device_id}/state", state_value, retain=True)
             self._published_switches[device_id] = state_value
+
+        # 虚拟时间：变化才发（注意别用 now 这个名字，上面已经用它存单调时钟了）
+        try:
+            virtual_time = self.client.get_virtual_time()
+        except SimuHomeError:
+            virtual_time = None
+        if virtual_time and virtual_time != self._published_time and self._should_publish("time", now):
+            self.mqtt.publish(f"{self.prefix}/time", virtual_time, retain=True)
+            self._published_time = virtual_time
+            self._last_pub_at["time"] = now
 
     def _interval(self) -> float:
         """活跃时 1 秒一轮，空闲时 10 秒一轮。"""

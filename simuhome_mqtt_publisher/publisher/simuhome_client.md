@@ -6,6 +6,7 @@
 
 ```text
 get_home_state()                  GET  /api/home/state            → 房间、设备、环境量
+get_virtual_time()                GET  /api/time                  → 虚拟时间字符串（data.now）
 get_device_attributes(device_id)  GET  /api/devices/{id}/attributes → 设备属性
 execute_onoff(device_id, command) POST /api/devices/{id}/commands   → On / Off
 ```
