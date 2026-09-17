@@ -132,6 +132,7 @@ D:\D_coderesource\simuhome\                    工作区根目录（★ = git �
 │  │  ├─ test_contract_tools.py                8 个工具跑同一套契约用例
 │  │  ├─ test_e2e_real_ha.py                   连真实 HA 的端到端脚本（手动跑）
 │  │  ├─ test_llm_smoke.py                     DeepSeek 直连服务，验模型选工具与诚实性
+│  │  ├─ test_degraded_backend.py              停发布器 / 停 broker / 重建发现（破坏性，手动跑）
 │  │  └─ test_unit_conditions.py / test_unit_clock.py / test_unit_runtime.py  待补（随 M4）
 │  └─ data\home_mcp.sqlite3                    运行时生成：memory / schedules / calls 三张表
 │
@@ -496,7 +497,9 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 交付   第 10 节的验收表填满 + 动作词表覆盖率报告（8 个动作 × 2 个后端，
        每格标"已验证 / 当前无设备 / 未实现"）+ calls 表的调用统计
 验收   验收表全绿；探针 6/6；HA 侧 6 个动作全部已验证，
-       set_brightness 与 set_position 标"当前无设备"
+       set_brightness 与 set_position 标"当前无设备"；
+       降级与恢复（tests\test_degraded_backend.py）三例 21/21：停发布器 / 停 broker /
+       重建发现，含 DEVICE_UNAVAILABLE 拦截与自愈
 ```
 
 ### 7.6 二期 / 三期
@@ -513,7 +516,7 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 
 按「职责 / 输入 / 输出 / 读取 / 写入 / 不负责 / 对应文件」写，实现时逐条对照。
 
-计数与文档规则：`src\` 22 个 `.py`（已全部落地）+ `tests\` 目标 8 个（当前 5 个，待补 3 个单测随 M4），
+计数与文档规则：`src\` 22 个 `.py`（已全部落地）+ `tests\` 目标 9 个（当前 6 个，待补 3 个单测随 M4），
 加 `pyproject.toml`、`README.md`、`config.example.yaml` 三个根文件；每个 `.py` 另配一份同名中文 `.md`
 （如 `observe_home.py` → `observe_home.md`），解释输入输出与职责，改代码必须同步改文档。
 
@@ -558,15 +561,18 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 没有拓扑       T1 空间任务测不了；0 个门磁实体，inspect_room 的 doors 恒为 null
 动作面有限      12 台可控设备 = 9 switch + 2 climate + 1 fan；没有 light / cover
 advance 耗时    虚拟时钟 1:1，HA 侧 advance 就是真等；长时序任务只能放沙盒后端
-掉线假成功      发布器掉线后实体变 unavailable，但 HA 仍会发命令到主题，
-                必须靠 DEVICE_UNAVAILABLE 前置检查兜住
+掉线假成功      发布器 / broker 掉线后实体变 unavailable，HA 仍会接受服务调用、
+                把命令发到主题，所以要靠 DEVICE_UNAVAILABLE 前置检查兜住。
+                2026-09-18 真机验证：停发布器与停 broker 都被拦下且命令没下发，
+                期间 inspect_device 的六字段是 null（不谎报 on=false），重启后自动恢复
 环境太慢       空调 1.8 °C/h、风扇 0.72 °C/h，跨房间传播任务在真实时间轴上不可达，
                 这类任务要么放沙盒快进，要么改 SimuHome 的效应参数（改参数要同步改本文 4.3）
 命名不稳定      用户可改实体名；entity_id 靠改名脚本强制，配置只作覆盖
 单实例假设      一个 HA、一个令牌、一个 sqlite；并发实验要各起一份
 动态依赖        entry 到后端是字符串表 + importlib，工具链看不到这条边
-未验证          M5-1（reset 后是否重复建设备）、M5-2（broker 重启后能否自动恢复）、
-                长时间运行（内存 / 日志 / 死锁）
+未验证          长时间运行（内存 / 日志 / 死锁）。M5-1 与 M5-2 已于 2026-09-18 验证：
+                reset 重建后 25 实体 / 16 条设备注册无重复、rename dry-run 为 0；
+                broker 重启后发布器自动重连、实体恢复（tests\test_degraded_backend.py 21/21）
 ```
 
 ## 10. 验收清单
