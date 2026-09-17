@@ -43,7 +43,9 @@ git commit -m "说明这次改了什么"
 ## 文档索引
 
 ```text
-source.md                                    自动生成的目录与来源登记表
-finally new paper\HomeAssistant双仓库接口分析\  01~09 号设计与选型文档
+source.md                                     自动生成的目录与来源登记表
+finally new paper\HomeAssistant双仓库接口分析\  01~11 号设计与选型文档
+                                              11 是基于实测的架构基线，实现以它为准
 ha_mcp_server\PLAN.md                         MCP 项目的长期计划
+simuhome_mqtt_publisher\README.md             SimuHome→MQTT→HA 的实际接入工程
 ```

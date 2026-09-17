@@ -7,8 +7,11 @@
 
 ```text
 输入   config.yaml、SimuHome 当前的设备列表
-输出   清空 homeassistant/sensor/<room>_<metric>/config 与 homeassistant/switch/<device_id>/config
+输出   清空 sensor 主题，以及每台设备的 switch 主题
+       （空调与风扇历史上发布成过 switch，所以它们的 switch 主题也要一起清）
 ```
+
+broker 现在开了账号密码，脚本会从 config.yaml 的 `broker.credentials_file` 读凭据再连接。
 
 ## 使用时机
 
@@ -21,5 +24,6 @@
 
 ```text
 清空后要重启发布器（start_publisher.ps1），它会重新发布 discovery 与状态
+重建完成后跑一次 rename_entities.py，把自动生成的 entity_id 改成规范名
 实体被删除后，历史统计会从零开始
 ```

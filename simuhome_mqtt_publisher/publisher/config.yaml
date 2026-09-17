@@ -30,3 +30,14 @@ rooms:
   living_room: {area: living_room, name: 客厅}
   kitchen: {area: kitchen, name: 厨房}
   utility_room: {area: utility_room, name: 杂物间}
+
+# 空调：发布成 climate，模式 off/cool/heat；温度范围与步长按 SimuHome 允许的 7~32°C
+climate:
+  min_temp: 7.0
+  max_temp: 32.0
+  temp_step: 0.5
+
+# 风扇：发布成 fan，档位用百分比表示
+fan:
+  speed_range_min: 1
+  speed_range_max: 100

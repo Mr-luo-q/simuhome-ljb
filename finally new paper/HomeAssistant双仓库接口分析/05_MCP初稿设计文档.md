@@ -10,6 +10,25 @@
 不做     沙盒后端、OAuth、改 HA 源码、写自定义集成（进程内集成列为二期触发项）
 ```
 
+### 1.1 实测基线（2026-09-17，本文所有实现细节以此为准）
+
+```text
+HA 版本        2026.6.4（容器）      MCP SDK 1.26.0（容器内实测）
+实体规模       /api/states 共 44 个，其中 simuhome 25 个：9 switch + 2 climate + 1 fan + 13 sensor
+房间           3 个 area：living_room / kitchen / utility_room，可控设备 5 / 3 / 4
+设备注册表     21 台 device，其中 simuhome 16 台 = 12 台可控 + 3 台房间虚拟设备 + 1 台网关
+映射链         entity → device_id → area_id；实体自身的 area_id 全是 None，必须经 device 取
+unique_id      switch：simuhome_<device_id>_switch   climate：_climate   fan：_fan
+               sensor：simuhome_<room>_<metric>      虚拟时间：simuhome_virtual_time
+entity_id      由 rename_entities.py 强制成 <domain>.simuhome_<...>；
+               MQTT discovery 里的 object_id 字段在 HA 2026.6 不生效，写了也会被忽略
+命令时延       一次命令 + 回读 280~388 ms（空调设模式 373、设温度 280、风扇设档 388）
+时间语义       虚拟时钟按 1:1 真实时间推进（实测 20.0 s 对 20.0 s），HA 侧无法快进
+logbook        近 8 小时 3107 条，其中 2820 条来自虚拟时间传感器（91%），查询要默认排除
+能力接口       get_services_for_target 只返回服务名列表，且会混入 homeassistant.reload_config_entry；
+               supported_features 对 switch 返回 null；参数 schema 需要用 REST /api/services 补齐
+```
+
 ## 2. 分层：外层三块，内部三层
 
 ```text
@@ -78,13 +97,13 @@ ha_mcp_server\
 
 | 文件 | 对应工具 | 关键实现点 | 实现阶段 |
 | --- | --- | --- | --- |
-| `observe_home.py` | `observe_home` | area 注册表 + 状态过滤 + 时间 | M1 |
-| `inspect_room.py` | `inspect_room` | area 关联实体 + 环境量聚合 | M2 |
-| `inspect_device.py` | `inspect_device` | 状态 + `get_services_for_target` 交叉 | M2 |
-| `execute_action.py` | `execute_action` | 动作映射 + 服务调用 + 可选回读 | M3 |
+| `observe_home.py` | `observe_home` | area 注册表 + 按 area 过滤实体（44 选 25）+ 时间 | M1 |
+| `inspect_room.py` | `inspect_room` | `extract_from_target(area_id)` + entity→device→area 关联 + 环境量聚合 | M2 |
+| `inspect_device.py` | `inspect_device` | 状态 + 服务名白名单 + REST `/api/services` 补字段 | M2 |
+| `execute_action.py` | `execute_action` | 规范动作 → domain/service 或属性写入 + 回读（280~388 ms） | M3 |
 | `time_control.py` | `time_control` | 事件订阅；预约交给调度器 | M4 |
 | `check_goal.py` | `check_goal` | 调 `contract\conditions.py` 求值 | M3 |
-| `query_events.py` | `query_events` | logbook，缺则退回 history | M2 |
+| `query_events.py` | `query_events` | logbook + 默认排除虚拟时间传感器；缺则退回 history | M2 |
 | `memory.py` | `memory` | 读写 sqlite 的 memory 表 | M4 |
 
 行数量级估算（排期用，不追求精确）：
@@ -124,15 +143,27 @@ runtime.py   → 只依赖标准库与 PyYAML
 | 工具 | 参数 | 返回 | 关键实现点 |
 | --- | --- | --- | --- |
 | `observe_home` | 无 | 房间清单 + 环境量摘要 + 时间 | area 注册表 + 状态过滤 + 时间 |
-| `inspect_room` | `room_id` | 环境量、设备清单、门状态 | area 关联实体，环境量按配置聚合 |
-| `inspect_device` | `device_id` | 状态 + 可用动作 | 状态 + `get_services_for_target` 交叉 |
+| `inspect_room` | `room_id` | 环境量 + 设备清单 + `doors: null` | area 关联实体；当前没有门磁实体，门状态恒为 null |
+| `inspect_device` | `device_id` | 状态 + 可用动作与参数范围 | 状态 + 服务名白名单 + REST 服务 schema |
 | `execute_action` | `device_id`、`action`、参数 | 执行结果与回执 | 动作映射 + 服务调用 + 可选回读 |
 | `time_control` | `op`（advance / schedule / list / cancel） | 快照或预约 id | 事件订阅；预约靠自带调度器 |
 | `check_goal` | 条件列表 | 每条是否满足 | `contract\conditions.py` 求值 |
-| `query_events` | 时间窗、实体 | 事件序列 | logbook，缺则退回 history |
+| `query_events` | 时间窗、实体 | 事件序列 | logbook，默认排除 `sensor.simuhome_virtual_time` |
 | `memory` | `op`（read / write）、`key` | 记忆内容 | 本地 sqlite |
 
 统一返回外壳：`{"ok": bool, "data": {...}, "error": {"code","message","hint"}, "meta": {"elapsed_ms","clock"}}`。
+
+规范动作词表（8 个工具共用的一套动作名，两个后端各自翻译成自己的调用）：
+
+```text
+switch   turn_on / turn_off / toggle
+climate  set_mode(off|cool|heat) / set_temperature(7.00~32.00, 步长 0.5)
+fan      turn_on / turn_off / set_percentage(0~100)
+传感器    只读，不提供动作
+
+落到 HA 是 switch.turn_on / climate.set_temperature / fan.set_percentage 等服务调用；
+落到沙盒是 Matter 风格命令或属性写入。动作名由 contract\tools.py 定义，后端只做翻译。
+```
 
 错误码（`errors.py` 里定义，后端只允许抛这些）：
 
@@ -140,6 +171,7 @@ runtime.py   → 只依赖标准库与 PyYAML
 HA_UNREACHABLE      连不上 HA 或超时
 UNKNOWN_DEVICE      查不到 device_id 对应的实体
 UNKNOWN_ROOM        查不到 room_id 对应的 area
+DEVICE_UNAVAILABLE  实体处于 unavailable（发布器掉线），此时调用服务不会报错但世界不动
 UNSUPPORTED_ACTION  该实体不支持这个动作
 SERVICE_ERROR       HA 返回服务调用失败
 VERIFY_TIMEOUT      调用成功但状态未按时变化（不算失败，附在返回值里）
@@ -149,6 +181,9 @@ BAD_TARGET          条件里的目标无法解析
 BAD_REQUEST         参数不合 schema
 NOT_IMPLEMENTED     该工具本阶段还没实现（M1 阶段会出现，逐步消失）
 ```
+
+`DEVICE_UNAVAILABLE` 的判定方式：调用前先读实体状态，`unavailable` / `unknown` 直接返回该错误，
+不要发服务调用——MQTT 实体掉线时 HA 仍会把命令发到主题，只是没人执行，会得到假成功。
 
 ## 6. 模块规格
 
@@ -255,19 +290,16 @@ rooms:
   living_room: living_room
   kitchen: kitchen
   utility_room: utility_room
-room_env:
-  living_room:
-    temperature: sensor.temperature
-    humidity: sensor.humidity
-    illuminance: sensor.illuminance
-    pm10: sensor.pm10
-devices: {}                     # 留空则用 unique_id 规则推导
-doors:
-  - binary_sensor.living_room_door
+room_env: {}                    # 留空即可：按 area + device_class 推导环境量，见下方说明
+devices: {}                     # 留空即可：映射表由实体注册表在启动时生成
+doors: []                       # 当前没有门磁实体，inspect_room 的 doors 字段恒为 null
 execution:
   verify_after_action: true
-  verify_delay_ms: 300
+  verify_delay_ms: 500          # 实测一次命令+回读 280~388 ms，300 ms 会误判
   verify_attempts: 3
+events:
+  exclude_entities:             # query_events 默认排除的噪声源，实测占 logbook 的 91%
+    - sensor.simuhome_virtual_time
 memory:
   db_path: ./data/home_mcp.sqlite3   # 相对本配置文件所在目录
 server:
@@ -276,6 +308,18 @@ server:
     host: 127.0.0.1
     port: 8765
     auth_token: ${MCP_TOKEN}
+```
+
+配置里为什么不再手写实体 id：
+
+```text
+环境量   按 area 归属 + sensor 的 device_class（temperature / humidity / illuminance / pm10）推导，
+         HA 那边发布器已经写死这套 device_class，配置再写一遍只会两边漂
+设备映射 entity_id 与 unique_id 不是一回事：switch 的 unique_id 带 _switch 后缀，entity_id 不带；
+         启动时读 config/entity_registry/list + config/device_registry/list 建表才可靠，
+         配置只作为覆盖项（少数被用户改过名的实体）
+房间     只能从 device.area_id 取；device_id 前缀不可靠，utility 房间的设备叫 utility_ac 而不是
+         utility_room_ac，靠字符串切分会在这一间上出错
 ```
 
 ## 9. 解耦验收（已实测）
@@ -307,33 +351,38 @@ P6 配置 ${VAR} 可替换（避开 !env 坑）     通过
 | --- | --- | --- |
 | M1 | 骨架：entry、server、errors、contract 四件、runtime 的 config；`backend_ha\tools\` 八个文件全部建出，其中七个先返回 `NOT_IMPLEMENTED`，只把 `observe_home` 做实 | 起服务后 `tools/list` 返回 8 个工具；`observe_home` 能列出 3 个房间与 4 项环境量；其余七个调用时返回 `NOT_IMPLEMENTED` |
 | M2 | 只读三件套：`inspect_room`、`inspect_device`、`query_events` | 对 `living_room` 与 `living_room_side_light` 调用，返回结构符合第 5 节 |
-| M3 | `execute_action`、`check_goal` | 切 `switch.on_off_light` 并回读状态；条件判定返回 pass / fail |
+| M3 | `execute_action`、`check_goal` | 切 `living_room_side_light` 并回读状态；条件判定返回 pass / fail |
 | M4 | `time_control`、`memory`；进度通知 | advance 等一个 5 秒后的状态变化；schedule 10 秒后关灯；写后读回一致 |
-| M5 | 可行性验收 | 8 个工具各跑一遍，结果填进验收表，并附解耦探针报告 |
+| M5 | 可行性验收 | 8 个工具各跑一遍，结果填进验收表，并附解耦探针报告；所有时间是真实等待，单项超时上限 30 s |
 
 验收表（M5 要填）：
 
 | 工具 | 调用 | 期望 | 实测 | 通过 |
 | --- | --- | --- | --- | --- |
 | observe_home | 无 | 3 房间 + 4 环境量 + 时间 | | |
-| inspect_room | living_room | 6 台设备 + 环境量 | | |
+| inspect_room | living_room | 5 台设备 + 4 环境量 + doors=null | | |
 | inspect_device | living_room_side_light | 状态 + 动作清单 | | |
-| execute_action | turn_on | state_after=on | | |
-| time_control(advance) | 等 switch.tv 变 on | 到点返回快照 | | |
+| inspect_device | living_room_ac | 模式/设定点范围 7~32 + 当前温度 | | |
+| execute_action | 空调 set_temperature 25 | 回读 target_temp=25 | | |
+| execute_action | 风扇 set_percentage 60 | 回读 percentage=60 | | |
+| time_control(advance) | 等 living_room_tv 变 on | 到点返回快照 | | |
 | time_control(schedule) | 10 秒后关灯 | 到点执行成功 | | |
-| check_goal | 温度 < 24 | 返回 pass=false | | |
-| query_events | 最近 10 分钟 | 事件列表非空 | | |
+| check_goal | kitchen 温度 < 24 | 返回 pass=false | | |
+| query_events | 最近 10 分钟 | 事件列表非空，且不含虚拟时间传感器 | | |
 | memory | 写后读 | 内容一致 | | |
 
 ## 11. 风险与限制
 
 ```text
-没有拓扑       T1 空间任务在本稿测不了，inspect_room 只给门状态作为过渡
-可验证类型少    本机 SimuHome 集成只把设备暴露成 switch，light / climate / cover 的动作映射
-                先用 get_services_for_target 动态发现，等有真实实体再验证
-advance 耗时    真实 HA 上等待是真实时间，测试用短超时
-命名不稳定      实体名可被用户改；优先用 unique_id 规则，配置兜底
-服务调用异步    execute_action 之后状态不会立刻变，靠 verify 轮询；轮询失败不算调用失败
+没有拓扑       T1 空间任务在本稿测不了；当前 0 个门磁实体，inspect_room 的 doors 恒为 null
+能力面有限      12 台可控设备里 9 switch + 2 climate + 1 fan，没有 light / cover；
+                灯的亮度、窗帘位置在 SimuHome 里有属性但还没接进 HA，属二期
+advance 耗时    实测虚拟时钟 1:1 真实时间，HA 侧 advance 就是真等；单项超时上限 30 s，
+                长时序任务只能放在沙盒后端跑
+掉线假成功      发布器掉线后实体变 unavailable，但 HA 仍会把命令发到 MQTT 主题，
+                调用方要在执行前检查可用性（DEVICE_UNAVAILABLE），不能只看服务调用是否成功
+命名不稳定      实体名可被用户改；entity_id 靠 rename_entities.py 强制，配置只作覆盖
+服务调用异步    execute_action 之后状态不会立刻变，实测回读要 280~388 ms，verify 用 500 ms
 单实例假设      初稿一个 HA、一个令牌；多实例与多用户留到二期
 动态依赖        entry 到后端是字符串表 + importlib，工具链看不到这条边
 ```

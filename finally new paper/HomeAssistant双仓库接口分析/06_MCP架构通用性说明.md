@@ -79,17 +79,22 @@ Server 内部再分三层（⑤ 里的 a / b / c）
 
 | 标准层 | 05 文档里的对应 | 文件 | 状态 |
 | --- | --- | --- | --- |
-| 传输层 | stdio / Streamable HTTP | `__main__.py` | 已设计 |
-| 协议与会话 | MCP SDK 组装、工具注册、错误映射 | `server.py` | 已设计 |
-| 能力层 | 8 个 tools | `tools\*.py` | 已设计 |
+| 传输层 | stdio / Streamable HTTP | `entry.py` | 已设计 |
+| 协议与会话 | MCP SDK 组装、工具注册、错误映射 | `server.py`、`errors.py` | 已设计 |
+| 能力层 | 8 个 tools 的契约 | `contract\tools.py` | 已设计 |
 | 能力层（其余） | 资源、提示、采样、澄清、任务 | 无 | 留作升级点，见第 8 节 |
-| 通知 | 日志、进度 | `server.py` + `store.calls` | 计划 |
-| 业务层：后端适配 | REST 客户端、WS 客户端 | `ha\rest.py`、`ha\ws.py` | 已设计 |
-| 业务层：命名与索引 | device_id ↔ entity_id、区域关联 | `ha\registry.py` | 已设计 |
-| 业务层：动作模型 | 动作名 → domain/service/字段 | `ha\actions.py` | 已设计 |
-| 业务层：判定 | 目标条件求值 | `conditions.py` | 已设计 |
-| 业务层：持久化 | 记忆、预约、调用日志 | `store.py` | 已设计 |
-| 配置与鉴权 | HA 令牌只在服务端；客户端用独立 Bearer | `config.py` | 已设计 |
+| 通知 | 日志、进度 | `server.py` + `runtime` 的 calls 表 | 计划 |
+| 业务层：后端适配 | REST 客户端、WS 客户端 | `backend_ha\client.py` | 已设计 |
+| 业务层：命名与索引 | device_id ↔ entity_id、区域关联 | `backend_ha\mapping.py` | 已设计 |
+| 业务层：动作模型 | 规范动作 → domain/service/字段 | `contract\tools.py` + `backend_ha\mapping.py` | 已设计 |
+| 业务层：判定 | 目标条件求值 | `contract\conditions.py` | 已设计 |
+| 业务层：时间语义 | 虚拟时间与真实时间、格式与判定 | `contract\clock.py` | 已设计 |
+| 业务层：持久化 | 记忆、预约、调用日志 | `runtime.py` | 已设计 |
+| 配置与鉴权 | HA 令牌只在服务端；客户端用独立 Bearer | `runtime.py` + `entry.py` | 已设计 |
+
+文件名以 05 的目录树为准（`entry.py`、`server.py`、`errors.py`、`runtime.py`、
+`contract\`、`backend_ha\`），本文早先版本里的 `ha\rest.py`、`ha\registry.py`、`store.py`、
+`__main__.py` 是旧写法，已废弃。
 
 对照结论：**能力层我们只用了 tools 一个 primitive，其余四项（资源、提示、日志、进度）是标准里另有而我们暂未使用的**。这一取舍与官方 HA MCP 一致——它也是 tools 为主，资源与提示各一个，用来放上下文快照和系统提示。
 
@@ -138,7 +143,10 @@ Server 内部再分三层（⑤ 里的 a / b / c）
              澄清    用 elicitation 向用户提问，对应“该问还是该猜”那类任务
 ```
 
-## 8. 建议的接口预留（写进代码，初稿不实现）
+## 8. 建议的接口预留（二期，初稿只留文档不留空实现）
+
+初稿的目录树里没有这些能力的落点（05 的 32 个文件清单中没有 resources / prompts 模块），
+所以这一段只作为二期设计输入，不在初稿代码里埋空壳，避免出现"注册了但永远返回空"的工具。
 
 ```text
 resources   snapshot://home          当前全屋快照，读一次等于 observe_home
@@ -148,6 +156,9 @@ elicitation 仅当任务类型标记为“允许澄清”时才开放，默认�
 sampling    不开放。它会让宿主的模型额外生成内容，污染调用次数与成本统计
 roots       不开放。与本研究无关
 ```
+
+二期真要落地时，进度与取消挂在 `contract\sinks.py`，资源与提示新增 `resources\` 子包；
+先补 05 的目录树再动代码。
 
 ## 9. 一句话总结
 
@@ -167,18 +178,18 @@ Server 拆开看是三层，越往下越贴软件：
 a 协议壳（薄）
    工具注册、参数 schema 校验、错误码、传输与会话、日志与进度
    与后端无关，换成任何软件都不变
-   对应：server.py、__main__.py、tools\schema.py
+   对应：entry.py、server.py、errors.py
 
 b 语义层（中等）
    把 ToolSpec 的四类语义翻译成后端语义：观察、动作、时间、记忆
    例：device_id ↔ entity_id、动作 → domain/service/字段、
        房间聚合、目标条件求值、等待是“虚拟时间还是真实时间”
-   对应：ha\registry.py、ha\actions.py、conditions.py
+   对应：contract\tools.py、contract\conditions.py、contract\clock.py、backend_ha\mapping.py
 
 c 融合层（厚）
    与被控软件的数据模型对接：状态机与属性、事件总线、注册表（area/floor/device/entity）、
    可见性与权限、历史库、服务 schema
-   对应：ha\rest.py、ha\ws.py；再往深就是自定义集成
+   对应：backend_ha\client.py；再往深就是自定义集成
 ```
 
 判断“要不要往深处走”，看这四个信号：

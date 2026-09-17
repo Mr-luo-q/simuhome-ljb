@@ -1,4 +1,4 @@
-"""SimuHome HTTP 客户端：读全屋状态、读设备属性、执行命令。"""
+"""SimuHome HTTP 客户端：读全屋状态、读设备属性、执行命令、写属性。"""
 
 from __future__ import annotations
 
@@ -54,3 +54,33 @@ class SimuHomeClient:
 
         payload = {"endpoint_id": 1, "cluster_id": "OnOff", "command_id": command, "args": {}}
         return self._request("POST", f"/devices/{device_id}/commands", payload)
+
+    def execute_command(
+        self, device_id: str, cluster_id: str, command_id: str, args: dict | None = None
+    ) -> dict:
+        """执行任意 Matter 风格命令（目前用于 FanControl 等非 OnOff 集群）。"""
+
+        payload = {
+            "endpoint_id": 1,
+            "cluster_id": cluster_id,
+            "command_id": command_id,
+            "args": args or {},
+        }
+        return self._request("POST", f"/devices/{device_id}/commands", payload)
+
+    def write_attribute(
+        self, device_id: str, cluster_id: str, attribute_id: str, value: object
+    ) -> dict:
+        """直接写设备属性（空调设定温度、模式、风扇档位走这条路）。
+
+        注意：空调的 Thermostat / FanControl 属性有上电依赖，设备处于 Off 时会返回
+        DEPENDENCY_VIOLATION；调用方要先把设备打开再写。
+        """
+
+        payload = {
+            "endpoint_id": 1,
+            "cluster_id": cluster_id,
+            "attribute_id": attribute_id,
+            "value": value,
+        }
+        return self._request("POST", f"/devices/{device_id}/attributes/write", payload)
