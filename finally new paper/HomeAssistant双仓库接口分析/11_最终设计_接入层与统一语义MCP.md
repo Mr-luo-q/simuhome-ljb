@@ -123,7 +123,16 @@ D:\D_coderesource\simuhome\                    工作区根目录（★ = git �
 │  │     ├─ __init__.py                        导出 {工具名: 实现}
 │  │     ├─ client.py                          REST + WebSocket 连接与订阅
 │  │     ├─ mapping.py                         device_id ↔ entity_id、区域关联、动作翻译
-│  │     └─ tools\                             8 个工具实现，一工具一文件（见 5.2）
+│  │     └─ tools\                             8 个工具，一工具一文件，M1 先建骨架
+│  │        ├─ __init__.py                     收集 8 个实现，拼成 TOOLS 字典
+│  │        ├─ observe_home.py                 M1  全屋快照：area 注册表 + 环境量 + 虚拟时间
+│  │        ├─ inspect_room.py                 M2  房间：设备清单 + 环境量 + doors=null
+│  │        ├─ inspect_device.py               M2  设备：状态 + 动作与参数范围
+│  │        ├─ execute_action.py               M3  执行：规范动作 → 服务调用 + 回读
+│  │        ├─ check_goal.py                   M3  判定：调 contract\conditions.py
+│  │        ├─ query_events.py                 M2  事件：logbook + 排除清单
+│  │        ├─ time_control.py                 M4  时间：advance / schedule / list / cancel
+│  │        └─ memory.py                       M4  记忆：sqlite memory 表
 │  ├─ tests\
 │  │  ├─ __init__.py / fake_ha.py              假 HA，供契约测试
 │  │  ├─ test_contract_tools.py                8 个工具跑同一套契约用例
@@ -481,6 +490,10 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 
 按「职责 / 输入 / 输出 / 读取 / 写入 / 不负责 / 对应文件」写，实现时逐条对照。
 
+计数与文档规则：`src\` 22 个 `.py` + `tests\` 7 个 `.py` = 29 个，加 `pyproject.toml`、
+`README.md`、`config.example.yaml` 三个根文件共 32 个；每个 `.py` 另配一份同名中文 `.md`
+（如 `observe_home.py` → `observe_home.md`），解释输入输出与职责，改代码必须同步改文档。
+
 ### 8.1 publisher.py
 
 ```text
@@ -576,7 +589,22 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 读取      HA REST 与 WebSocket；runtime 的 sqlite
 写入      经 HA 服务调用改设备状态；写 sqlite
 不负责    不认识 HA 之外的平台（换后端只换 backend_ha\）、不做任务分解与自动编排
-对应文件  ha_mcp_server\src\home_mcp\（目录树见 3.2，契约见 5.2）
+对应文件  ha_mcp_server\src\home_mcp\（逐文件清单见 3.2，工具契约见 5.2）
+
+8 个工具文件的对应关系，一个工具一个文件，一个文件一份同名 .md：
+
+  backend_ha\tools\observe_home.py    ←→  observe_home       M1
+  backend_ha\tools\inspect_room.py    ←→  inspect_room       M2
+  backend_ha\tools\inspect_device.py  ←→  inspect_device     M2
+  backend_ha\tools\execute_action.py  ←→  execute_action     M3
+  backend_ha\tools\check_goal.py      ←→  check_goal         M3
+  backend_ha\tools\query_events.py    ←→  query_events       M2
+  backend_ha\tools\time_control.py    ←→  time_control       M4
+  backend_ha\tools\memory.py          ←→  memory             M4
+
+文件内部的分工：`contract\tools.py` 定义这 8 个工具的 ToolSpec（名字、参数、返回、错误、时间语义），
+`server.py` 按契约注册，`backend_ha\tools\*.py` 只负责把契约落到 HA 的 REST / WS 调用；
+换沙盒后端时新增 `backend_sandbox\tools\*.py` 即可，协议层与契约层不动。
 ```
 
 ## 9. 风险与边界
