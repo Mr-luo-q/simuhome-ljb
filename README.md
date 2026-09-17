@@ -8,14 +8,14 @@
 finally new paper\        论文讨论与设计文档、benchmark 与方法论文整理、架构图
 ha_mcp_server\            自建 MCP server 项目（计划与后续代码）
 old_simuhome_bridge_project\  早期 SimuHome×HA 桥接工程（历史参考，不再扩展）
-mcp\                      早期 MCP 实验代码与文档（不含 .venv 与 outputs）
-_tools\                   本地工具：MQTT 相关包说明、架构探针脚本
+_tools\                   本地工具：HA WebSocket 查询、source.md 生成、MQTT 安装包
 context\                  跨会话上下文与笔记
 ```
 
 ## 不跟踪什么（只看 source.md）
 
 ```text
+oldmcp\                   已废弃的早期 MCP 实验（改名后退出跟踪，仅留档，不参考）
 ha_core_official\         Home Assistant 官方源码克隆（含自己的 .git）
 simuprocject\             SimuHome 仿真内核源码
 tdp-nlu-private-main\     外部项目副本（5.9 GB）

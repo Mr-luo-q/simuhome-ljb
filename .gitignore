@@ -8,7 +8,6 @@
 !/ha_mcp_server/
 !/simuhome_mqtt_publisher/
 !/old_simuhome_bridge_project/
-!/mcp/
 !/_tools/
 !/context/
 
@@ -22,7 +21,6 @@ __pycache__/
 *.pdf
 /_tools/mqtt/*.exe
 /_tools/mqtt/wheels/
-/mcp/outputs/
 
 # 运行时日志：桥接进程还在跑，日志每几秒就变；保留操作记录，忽略标准输出与错误
 /old_simuhome_bridge_project/logs/*.log
@@ -36,6 +34,9 @@ __pycache__/
 # MQTT 凭据与密码文件
 /simuhome_mqtt_publisher/broker/mosquitto.credentials.txt
 /simuhome_mqtt_publisher/broker/mosquitto.passwd
+
+# 已退役、不再跟踪也不再参考的目录
+/oldmcp/
 
 # 明确排除的外部大目录（本来也不会被放行，写出来是为了可读）
 /.git_old_20260917/

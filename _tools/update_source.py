@@ -21,13 +21,13 @@ TRACKED: dict[str, str] = {
     "ha_mcp_server": "自建 MCP server 项目（当前只有长期计划与说明）",
     "simuhome_mqtt_publisher": "MQTT 接入工程：broker 配置与启动脚本，发布器（M2 待实现）",
     "old_simuhome_bridge_project": "已退役的 SimuHome×HA 桥接工程（含仍在用的 compose.yaml 与 SimuHome 启动脚本）",
-    "mcp": "早期 MCP 实验代码与文档（不含 .venv）",
     "_tools": "本地工具与探针：MQTT broker 包、架构探针脚本（安装包与 wheels 不入库）",
     "context": "跨会话上下文与笔记",
 }
 
 # 不入库、但要在 source.md 里登记的大目录
 REGISTERED: dict[str, str] = {
+    "oldmcp": "已废弃的早期 MCP 实验（代码与文档，仅存档，不参与研究）",
     "ha_core_official": "Home Assistant Core 官方源码克隆（含 core 子仓库）",
     "simuprocject": "SimuHome 仿真内核源码（被控端本体）",
     "tdp-nlu-private-main": "外部项目副本：TDP-NLU 私有仓库",

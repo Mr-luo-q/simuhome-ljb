@@ -1,6 +1,6 @@
 # source.md
 
-本文件由 `_tools/update_source.py` 自动生成，最后更新：2026-09-17 21:26。
+本文件由 `_tools/update_source.py` 自动生成，最后更新：2026-09-17 21:47。
 
 仓库只跟踪下面第一张表里的目录；第二、三张表里的内容不入库，只登记来源与体积。
 
@@ -12,7 +12,6 @@
 | `ha_mcp_server` | 自建 MCP server 项目（当前只有长期计划与说明） | 0.0 MB | 2 | 2026-09-17 |
 | `simuhome_mqtt_publisher` | MQTT 接入工程：broker 配置与启动脚本，发布器（M2 待实现） | 0.1 MB | 38 | 2026-09-17 |
 | `old_simuhome_bridge_project` | 已退役的 SimuHome×HA 桥接工程（含仍在用的 compose.yaml 与 SimuHome 启动脚本） | 0.7 MB | 12 | 2026-06-21 |
-| `mcp` | 早期 MCP 实验代码与文档（不含 .venv） | 75.4 MB | 6381 | 2026-08-31 |
 | `_tools` | 本地工具与探针：MQTT broker 包、架构探针脚本（安装包与 wheels 不入库） | 29.9 MB | 30 | 2026-09-17 |
 | `context` | 跨会话上下文与笔记 | 0.1 MB | 7 | 2026-09-17 |
 
@@ -23,6 +22,7 @@
 
 | 目录 | 用途 | 大小 | 文件数 | 自带仓库 | 远端 / 版本 |
 | --- | --- | --- | --- | --- | --- |
+| `oldmcp` | 已废弃的早期 MCP 实验（代码与文档，仅存档，不参与研究） | 75.4 MB | 6381 | 否 | (无版本信息) |
 | `ha_core_official` | Home Assistant Core 官方源码克隆（含 core 子仓库） | 1030.9 MB | 26334 | 是（ha_core_official\core） | https://github.com/home-assistant/core.git（dev @ 2008551cc99 2026-06-22） |
 | `simuprocject` | SimuHome 仿真内核源码（被控端本体） | 520.8 MB | 26315 | 是（simuprocject\Simuhome_experiment） | https://github.com/Mr-luo-q/Simuhome_experiment.git（main @ f8a813f 2026-06-17） |
 | `tdp-nlu-private-main` | 外部项目副本：TDP-NLU 私有仓库 | 5934.3 MB | 214794 | 否 | (无版本信息) |

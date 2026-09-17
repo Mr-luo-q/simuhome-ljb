@@ -8,7 +8,7 @@
 最终选型      MQTT discovery（弃用早期 HTTP bridge 方案）
 当前状态      已上线并验证：3 房间 / 15 设备 / 25 实体，读写通，断线变 unavailable
 
-本目录另有一份 上下文总结.md（9 月 10 日）：UbiComp 三支柱讨论、mcp/doc7-11 旧蓝图、待拍板 Q1~Q8
+本目录另有一份 上下文总结.md（9 月 10 日）：UbiComp 三支柱讨论、oldmcp/doc7-11 旧蓝图、待拍板 Q1~Q8
 仓库根 context\ 里还有 6-7 月的 上下文总结1~6.md，与本文不是同一套系列
 ```
 
@@ -48,7 +48,7 @@ _preview.png               三栏海报：评测基准 / 沙盒与训练 / 结�
 不一致一 接口清单在三份文档里有三套命名（observe_home vs get_home_state vs execute_command）
 不一致二 海报写 SFT→DPO→GRPO，而主用稿的四层训练里没有 DPO
 不一致三 Q1（纯连通图 vs 连通图+传播）其实已被默认成"有传播"——沙盒设计里写了沿边传播
-不一致四 本文件夹的 8_/9_ 与 mcp\doc\8_/9_ 是同号不同文；doc1/doc2 引用的 doc7/10/11 不在本目录
+不一致四 本文件夹的 8_/9_ 与 oldmcp\doc\8_/9_ 是同号不同文；doc1/doc2 引用的 doc7/10/11 不在本目录
 ```
 
 ### 1.3 用户反馈与教训
@@ -107,7 +107,7 @@ D HA 配置目录   D:\homeassistant\config（容器挂载成 /config，集成/�
 第一次  用户要求改名帮助区分 → 中文名（HA官方源码_core / SimuHome桥接工程）
 第二次  用户担心中文路径解析问题 → 英文名：ha_core_official / simuhome_bridge_project
 连带     bridge\app.py 的 LOG_DIR、start_simuhome_bridge.ps1 的 5 处路径、simuhome.Dockerfile 的 COPY、
-        README 目录树、Home Assistant官方仓库梳理.md 33 处、mcp\doc\9 的 7 处、上下文总结 1 处、
+        README 目录树、Home Assistant官方仓库梳理.md 33 处、oldmcp\doc\9 的 7 处、上下文总结 1 处、
         本目录 4 份文档共 17 处
 插曲     批量替换误伤 bridge\__pycache__ 里的 .pyc（二进制被改写）→ 直接删掉，运行时会重建
 方法     长路径优先、按文件枚举、保留 BOM 状态，替换后重新扫描确认零残留
