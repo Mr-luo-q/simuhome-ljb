@@ -23,6 +23,9 @@ __pycache__/
 /_tools/mqtt/wheels/
 /mcp/outputs/
 
+# 运行时日志：桥接进程还在跑，日志每几秒就变；保留操作记录，忽略标准输出与错误
+/simuhome_bridge_project/logs/*.log
+
 # 明确排除的外部大目录（本来也不会被放行，写出来是为了可读）
 /.git_old_20260917/
 /.claude/
