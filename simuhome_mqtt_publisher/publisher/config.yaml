@@ -1,0 +1,32 @@
+# 发布器配置：SimuHome 地址、broker 地址、轮询与死区参数
+simuhome:
+  base_url: http://127.0.0.1:8000/api
+  timeout_s: 10
+
+broker:
+  host: 127.0.0.1
+  port: 1883
+  client_id: simuhome-publisher
+  keepalive: 60
+  credentials_file: ../broker/mosquitto.credentials.txt   # 用户名、口令各一行；不存在则匿名连接
+
+poll:
+  active_interval_s: 1      # 最近有命令或有设备处于 on 时
+  idle_interval_s: 10       # 空闲时
+  active_window_s: 300      # 命令后保持活跃的时长
+
+publish:
+  min_interval_s: 1         # 单实体最快发布间隔
+  deadband:                 # 数值型死区，超过才发布
+    temperature: 0.1
+    humidity: 1.0
+    illuminance: 10.0
+    pm10: 1.0
+
+topic_prefix: simuhome/v1
+discovery_prefix: homeassistant
+
+rooms:
+  living_room: {area: living_room, name: 客厅}
+  kitchen: {area: kitchen, name: 厨房}
+  utility_room: {area: utility_room, name: 杂物间}

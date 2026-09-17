@@ -1,0 +1,15 @@
+# amqtt broker 配置：给 SimuHome 发布器与 HA 的 MQTT 集成共用
+# 绑定 127.0.0.1：HA 容器经 host.docker.internal 来的连接在本机表现为 127.0.0.1，
+# 因此只监听环回即可满足 HA，同时把局域网完全挡在外面（原先绑 0.0.0.0 会暴露给同网段）
+listeners:
+  default:
+    type: tcp
+    bind: 127.0.0.1:1883
+    max_connections: 200
+
+plugins:
+  amqtt.plugins.logging_amqtt.EventLoggerPlugin:
+  amqtt.plugins.authentication.AnonymousAuthPlugin:
+    allow_anonymous: true
+  amqtt.plugins.sys.broker.BrokerSysPlugin:
+    sys_interval: 20

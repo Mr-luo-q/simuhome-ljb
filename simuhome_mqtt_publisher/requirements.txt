@@ -1,0 +1,5 @@
+# 运行本工程需要的 Python 包（本机已从 _tools\mqtt\wheels 离线装好）
+amqtt==0.12.1
+paho-mqtt==2.1.0
+websockets==15.0.1
+PyYAML==6.0.3
