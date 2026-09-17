@@ -231,6 +231,19 @@ def test_inspect_device_on_fixture() -> None:
     else:
         raise AssertionError("不存在的设备应当报 UNKNOWN_DEVICE")
 
+    # 掉线时六字段全 None：不能把 unavailable 说成 on=false（真机降级实测过这一点）
+    offline_states = [dict(item) for item in STATES]
+    for item in offline_states:
+        if item["entity_id"] in ("switch.simuhome_living_room_tv", "fan.simuhome_kitchen_fan"):
+            item["state"] = "unavailable"
+    offline = FixtureContext()
+    offline.client = FakeRestClient(states=offline_states)
+    offline_tv = inspect_device.run(offline, {"device_id": "living_room_tv"})
+    offline_fan = inspect_device.run(offline, {"device_id": "kitchen_fan"})
+    assert offline_tv["state"] == {"on": None}, offline_tv["state"]
+    assert offline_fan["state"] == {"on": None, "level": None}, offline_fan["state"]
+    assert len(offline_tv["actions"]) == 3, "动作清单看能力，不随可用性变化"
+
 
 def test_query_events_on_fixture() -> None:
     """默认只看本家庭并排除虚拟时间；显式指定实体时两层过滤都关；参数校验生效。"""

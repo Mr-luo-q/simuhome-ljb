@@ -24,7 +24,8 @@ inspect_room、inspect_device、query_events、execute_action、check_goal、未
 映射规则        逻辑 id、unique_id 拆分、房间归属（实体 area_id 为 None 时经设备取）
 observe_home    3 个房间、4 项环境量、虚拟时间、设备清单
 inspect_room    环境量 + 设备清单 + doors=null；房间不存在 → UNKNOWN_ROOM
-inspect_device  三种 kind 的状态摘要与动作表；空调温度范围取设备自报的 7~32 / 步长 0.5
+inspect_device  三种 kind 的状态摘要与动作表；空调温度范围取设备自报的 7~32 / 步长 0.5；
+                实体掉线时六字段全 None（不把 unavailable 说成 on=false），动作清单不变
 query_events    默认排除虚拟时间；显式指定实体时不排除；limit 与时间校验生效
 execute_action  四道闸门（设备存在 / 可用 / 动作支持 / 参数范围）+ 三类设备的写路径；
                 假 HA 可回读，越界与不支持动作都被本地拦下

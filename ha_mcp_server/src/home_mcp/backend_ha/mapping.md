@@ -32,7 +32,9 @@ to_number(value)              状态字符串 → 数值；unknown / unavailable
 collect_env(by_id, entity_ids) 一个房间的传感器实体 → {temperature, humidity, illuminance, pm10}
 summarize_state(kind, state)   实体状态 → 六个字段（on / mode / target / level / position / current），
                                按类别取子集：climate 给 on+mode+target+current，fan 给 on+level，switch 给 on；
-                               范围与步长不放这里，它们属于动作参数
+                               范围与步长不放这里，它们属于动作参数；
+                               实体掉线（unavailable / unknown）或读不到时字段全给 None，
+                               不把掉线说成 on=false（实测：那样模型会读成"灯是关的"）
 device_actions(kind, state)    按类别取动作清单，并用设备自报范围覆盖契约默认值
                                （inspect_device 与 execute_action 共用同一份，避免两边漂）
 resolve_target(by_id, view, target)  check_goal 的目标解析：

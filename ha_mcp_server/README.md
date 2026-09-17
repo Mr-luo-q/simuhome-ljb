@@ -25,6 +25,7 @@ tests\
   test_contract_tools.py 契约测试 12 项
   test_e2e_real_ha.py   端到端：起 stdio 服务跑 21 项验收（含写路径与还原）
   test_llm_smoke.py     大模型冒烟：DeepSeek 直连服务，两轮 9 项（真开灯并还原）
+  test_degraded_backend.py 降级与恢复：停发布器 / 停 broker / 重建发现（破坏性，手动跑）
 ```
 
 每个 `.py` 都配一份同名中文 `.md`，说明职责、输入输出与边界。
@@ -48,6 +49,9 @@ C:\ProgramData\anaconda3\python.exe tests\test_e2e_real_ha.py --config config.ya
 
 # 4 大模型冒烟：先在 .env 里填 DEEPSEEK_API_KEY，再跑（模型选工具 / 参数合规 / 不谎报）
 C:\ProgramData\anaconda3\python.exe tests\test_llm_smoke.py --config config.yaml
+
+# 5 降级与恢复（破坏性：会停发布器 / 停 broker / 清发现配置，跑完自动拉回）
+C:\ProgramData\anaconda3\python.exe tests\test_degraded_backend.py --config config.yaml --case all
 ```
 
 ## 最近一次实测结论
@@ -58,6 +62,9 @@ C:\ProgramData\anaconda3\python.exe tests\test_llm_smoke.py --config config.yaml
 check_goal 两组判定、测试后三台设备还原）；time_control / memory 返回 NOT_IMPLEMENTED。
 契约 12/12、端到端 21/21、大模型冒烟 9/9（模型先 inspect 再 execute_action，
 实机 on=true，随后还原 off）。
+降级与恢复 21/21：停发布器与停 broker 都被 DEVICE_UNAVAILABLE 拦下、命令不下发，
+掉线期间六字段为 null；broker 重启后发布器自动重连；reset 重建后 25 实体 /
+16 条设备注册无重复、rename dry-run 为 0。
 逐项证据与沿路修的问题见
 ..\finally new paper\HomeAssistant双仓库接口分析\11_最终设计_接入层与统一语义MCP.md §7，
 本文不重复。

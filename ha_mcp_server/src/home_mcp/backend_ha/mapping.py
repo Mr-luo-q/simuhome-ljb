@@ -130,11 +130,22 @@ def summarize_state(kind: str, entity_state: dict[str, Any] | None) -> dict[str,
     """六字段状态摘要（on / mode / target / level / position / current），按类别取子集。
 
     范围与步长不放这里——它们属于动作参数，见 device_actions()。
+    实体掉线（unavailable / unknown）或读不到时字段一律给 None：宁可说"不知道"，
+    也不把 unavailable 说成 on=false —— 实测降级窗口里那样模型会把掉线读成"灯是关的"。
     """
 
     state = entity_state or {}
     attributes = state.get("attributes") or {}
     raw = state.get("state")
+
+    if kind == "climate":
+        keys = ("on", "mode", "target", "current")
+    elif kind == "fan":
+        keys = ("on", "level")
+    else:
+        keys = ("on",)
+    if raw is None or raw in ("unavailable", "unknown"):
+        return dict.fromkeys(keys)
 
     if kind == "climate":
         return {

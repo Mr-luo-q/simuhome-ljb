@@ -13,6 +13,9 @@ M3  已完成（2026-09-18）  execute_action + check_goal；契约 12/12、端�
                           大模型冒烟 9/9（模型真开灯并自动还原）
 M4  下一步                time_control + memory（memory 属扩展项）
 M5                        验收表 + 动作覆盖率报告 + 探针复跑
+降级验证   已完成（2026-09-18）  停发布器 / 停 broker / 重建发现三例 21/21
+                                 （tests\test_degraded_backend.py，破坏性手动跑），
+                                 顺带答掉 M5-1 与 M5-2
 ```
 
 ## M3 落地时做的四件事（已完成，留作记录）
@@ -23,6 +26,13 @@ M5                        验收表 + 动作覆盖率报告 + 探针复跑
 3  check_goal 契约加 keep 参数（目标条件 conditions + 保持不变条件 keep）
 4  execute_action 用设备自报的 min/max 在本地校验参数——越界不发给 HA
    （实测 HA 对 40°C 返回的是 500，不是 400）
+```
+
+## 降级验证时做的一件事（已完成，留作记录）
+
+```text
+summarize_state 掉线时字段给 null：原来把 unavailable 说成 on=false，
+模型会把"发布器掉线"读成"灯是关的"；真机降级实测发现后改成六字段全 None
 ```
 
 ## M4 的前置
