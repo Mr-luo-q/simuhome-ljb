@@ -28,6 +28,10 @@ __pycache__/
 # 本地机密：HA 长期令牌、MCP 令牌等，永不入库
 /_secrets/
 
+# MCP server 的本地配置（含令牌占位）与运行时数据
+/ha_mcp_server/config.yaml
+/ha_mcp_server/data/
+
 # MQTT 工程的运行时日志
 /simuhome_mqtt_publisher/logs/
 

@@ -3,10 +3,53 @@
 自建的 MCP server：对外暴露 8 个工具（观察、控制、时间、验证、记忆），先接 Home Assistant，架构上可替换后端。
 
 ```text
-本目录当前状态    只有计划，没有代码
-长期计划          PLAN.md
-设计与接口规格     ..\finally new paper\HomeAssistant双仓库接口分析\05_MCP初稿设计文档.md
-工具语义与 HA 落点  ..\finally new paper\HomeAssistant双仓库接口分析\04_自建MCP接口与HA实现.md
-架构与分层说明     ..\finally new paper\HomeAssistant双仓库接口分析\06_MCP架构通用性说明.md
-解耦验证报告      ..\finally new paper\HomeAssistant双仓库接口分析\_架构探针\
+当前状态    M1 完成：8 个工具都已建出，observe_home 做实并已在真 HA 上跑通，其余 7 个返回 NOT_IMPLEMENTED
+设计文档    ..\finally new paper\HomeAssistant双仓库接口分析\11_最终设计_接入层与统一语义MCP.md
+长期计划    PLAN.md（M1~M5 的进度与分期）
+解耦验证    ..\finally new paper\HomeAssistant双仓库接口分析\_架构探针\（六项报告）
+```
+
+## 目录
+
+```text
+pyproject.toml          依赖 pin（mcp==1.26.0）+ 入口 ha-mcp
+config.example.yaml     配置模板；复制成 config.yaml 后令牌用 ${HA_TOKEN} 注入
+src\home_mcp\
+  entry.py / server.py / errors.py / runtime.py     协议壳与基础设施
+  contract\             工具契约、条件判定、时间语义、回传通道（只依赖标准库）
+  backend_ha\           HA 后端：client（REST+WS）、mapping（注册表映射）、tools\（8 个工具）
+tests\
+  fake_ha.py            离线夹具（真实注册表节选）
+  test_contract_tools.py 契约测试 7 项
+  test_e2e_real_ha.py   端到端：起 stdio 服务跑四项验收
+```
+
+每个 `.py` 都配一份同名中文 `.md`，说明职责、输入输出与边界。
+
+## 怎么跑
+
+```powershell
+cd D:\D_coderesource\simuhome\ha_mcp_server
+$env:HA_TOKEN = (Get-Content ..\_secrets\ha_token.txt -Raw).Trim()
+$env:MCP_TOKEN = "local-dev-token"
+
+# 1 契约测试（离线，不需要 HA）
+C:\ProgramData\anaconda3\python.exe tests\test_contract_tools.py
+
+# 2 只装配不起服务：打印 8 个工具名
+$env:PYTHONPATH = "$PWD\src"
+C:\ProgramData\anaconda3\python.exe -m home_mcp.entry --config config.yaml --dry-run
+
+# 3 端到端：按 stdio 起服务，列工具 + 调 observe_home
+C:\ProgramData\anaconda3\python.exe tests\test_e2e_real_ha.py --config config.yaml
+```
+
+## M1 实测结论（2026-09-17）
+
+```text
+tools/list     8 个工具
+observe_home   3 个房间、4 项环境量、虚拟时间；living_room 列出 5 台设备
+其余 7 个工具   返回 NOT_IMPLEMENTED（契约测试逐个验过）
+契约强制        后端少实现或多实现工具时启动期报错
+协议壳词汇检查    server.py / entry.py / contract\__init__.py 无后端词汇
 ```

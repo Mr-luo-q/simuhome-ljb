@@ -1,0 +1,26 @@
+# `backend_ha/mapping.py` 说明
+
+## 功能
+
+从实体、设备、区域三张注册表拼出映射视图，供 8 个工具复用。
+
+```text
+输入   entity_registry / device_registry / area_registry 三个列表
+输出   RegistryView{devices, sensors_by_area, areas, time_entity}
+读取   无（只吃传入的注册表数据）
+写入   无（纯函数）
+不负责   不发请求、不读状态（环境量的 device_class 在 observe_home 里从状态取）
+对应文件 src\home_mcp\backend_ha\mapping.py
+```
+
+## 三条转换规则（都来自实测）
+
+```text
+逻辑 id    设备标识 ('mqtt','simuhome_living_room_ac') → living_room_ac
+实体归属   unique_id 以 _switch / _climate / _fan 结尾的实体才是可控设备实体；
+           去掉后缀得到逻辑 id，实体域就是 kind
+房间       只从设备的 area_id 取；实体自身的 area_id 恒为 None，且 device_id 前缀不可靠
+```
+
+其它：`simuhome_virtual_time` 单独记为 `time_entity`；其余 `simuhome_` 开头的实体
+按设备所属房间归到 `sensors_by_area`，供环境量聚合使用。

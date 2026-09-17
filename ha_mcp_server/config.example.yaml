@@ -1,0 +1,33 @@
+# 配置模板：复制成 config.yaml 后填令牌。${VAR} 占位符由 runtime 替换，不用 !env。
+ha:
+  base_url: http://localhost:8123
+  token: ${HA_TOKEN}            # HA 长期访问令牌
+  timeout_s: 10
+
+rooms:                          # room_id → HA 的 area_id；当前三个房间同名
+  living_room: living_room
+  kitchen: kitchen
+  utility_room: utility_room
+
+room_env: {}                    # 留空：按 area + sensor.device_class 推导四类环境量
+devices: {}                     # 留空：映射表由实体注册表在启动时生成，配置只作覆盖
+doors: []                       # 当前没有门磁实体，inspect_room 的 doors 恒为 null
+
+execution:
+  verify_after_action: true
+  verify_delay_ms: 500          # 实测一次命令 + 回读 280~388 ms，300 ms 会误判
+  verify_attempts: 3
+
+events:
+  exclude_entities:             # query_events 默认排除的噪声源，实测占 logbook 的 91%
+    - sensor.simuhome_virtual_time
+
+memory:
+  db_path: ./data/home_mcp.sqlite3   # 相对本配置文件所在目录
+
+server:
+  transport: stdio              # stdio 或 http
+  http:
+    host: 127.0.0.1
+    port: 8765
+    auth_token: ${MCP_TOKEN}

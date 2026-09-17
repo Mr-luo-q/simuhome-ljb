@@ -424,6 +424,8 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 
 ### 7.1 M1 骨架 + observe_home（约 1 天）
 
+状态：已完成（2026-09-17）。实测结果见本节末尾。
+
 ```text
 内容   entry.py / server.py / errors.py / contract 四件 / runtime 的 config 部分；
        backend_ha\client.py 的 REST + WS 连接与鉴权；mapping.py 的注册表建表；
@@ -431,6 +433,14 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 验收   tools/list 返回 8 个工具；observe_home 返回 3 个房间 + 4 项环境量 + 虚拟时间；
        其余 7 个调用返回 NOT_IMPLEMENTED；后端少实现工具时启动即报错（契约强制）
 交付   可 stdio 起服务的骨架 + 一份 registry 快照（写进 tests\fake_ha.py 的夹具）
+```
+
+```text
+实测（真 HA）   tools/list = 8 个工具；observe_home = 3 房间 / 4 环境量 / 虚拟时间，
+               living_room 列出 5 台设备（ac、main_light、purifier、side_light、tv）
+               契约测试 7/7 通过；端到端 4/4 通过；协议壳词汇检查无命中
+沿路修的问题     WebSocket 客户端多命令共用写死的 id，第二条起收不到结果 → 改成一次会话内按 id 严格匹配
+新增约定        config.yaml 与 data\ 不入库（含令牌占位与运行时数据）
 ```
 
 ### 7.2 M2 只读三件套（约 1 天）
