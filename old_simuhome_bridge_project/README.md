@@ -1,4 +1,10 @@
-# Home Assistant + SimuHome 可靠部署方案设计
+# （已退役）Home Assistant + SimuHome 可靠部署方案设计
+
+> 2026-09-17 退役：SimuHome 已改由 MQTT 方案接入 HA（见 `..\simuhome_mqtt_publisher\`），
+> 本目录里的 bridge 不再运行、也不再扩展。保留它的原因有两个：
+> 一是历史参考，二是 `compose.yaml`（起 HA 容器）与两个 SimuHome 启动脚本仍在使用。
+> 注意：目录名加了 `old_` 前缀，`docker compose -f` 请用新路径；
+> compose.yaml 里已显式声明 `name: simuhome_bridge_project`，项目身份不变，不会与现有容器冲突。
 
 ## 目标
 

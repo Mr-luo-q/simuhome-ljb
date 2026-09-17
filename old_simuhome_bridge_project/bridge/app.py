@@ -23,7 +23,7 @@ from pydantic import BaseModel
 BRIDGE_HOST = "0.0.0.0"
 BRIDGE_PORT = 8010
 SIMUHOME_BASE_URL = "http://127.0.0.1:8000/api"
-LOG_DIR = Path(r"D:\D_coderesource\simuhome\simuhome_bridge_project\logs")
+LOG_DIR = Path(r"D:\D_coderesource\simuhome\old_simuhome_bridge_project\logs")
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 OPERATIONS_LOG = LOG_DIR / "simuhome-bridge-operations.jsonl"
 BRIDGE_STDOUT_LOG = LOG_DIR / "simuhome-bridge.log"

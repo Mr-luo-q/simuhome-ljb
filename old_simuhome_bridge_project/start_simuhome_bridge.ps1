@@ -1,13 +1,13 @@
-$bridgeRoot = "D:\D_coderesource\simuhome\simuhome_bridge_project\bridge"
+$bridgeRoot = "D:\D_coderesource\simuhome\old_simuhome_bridge_project\bridge"
 $pythonExe = "C:\ProgramData\anaconda3\python.exe"
 $healthUrl = "http://127.0.0.1:8010/health"
-$stdoutLog = "D:\D_coderesource\simuhome\simuhome_bridge_project\logs\simuhome-bridge.stdout.log"
-$stderrLog = "D:\D_coderesource\simuhome\simuhome_bridge_project\logs\simuhome-bridge.stderr.log"
+$stdoutLog = "D:\D_coderesource\simuhome\old_simuhome_bridge_project\logs\simuhome-bridge.stdout.log"
+$stderrLog = "D:\D_coderesource\simuhome\old_simuhome_bridge_project\logs\simuhome-bridge.stderr.log"
 
-New-Item -ItemType Directory -Force -Path "D:\D_coderesource\simuhome\simuhome_bridge_project\logs" | Out-Null
+New-Item -ItemType Directory -Force -Path "D:\D_coderesource\simuhome\old_simuhome_bridge_project\logs" | Out-Null
 
 $running = Get-CimInstance Win32_Process |
-    Where-Object { $_.CommandLine -like "*simuhome_bridge_project\\bridge*" -and $_.CommandLine -like "*app.py*" } |
+    Where-Object { $_.CommandLine -like "*old_simuhome_bridge_project\\bridge*" -and $_.CommandLine -like "*app.py*" } |
     Select-Object -First 1
 
 if (-not $running) {

@@ -7,7 +7,7 @@
 !/finally new paper/
 !/ha_mcp_server/
 !/simuhome_mqtt_publisher/
-!/simuhome_bridge_project/
+!/old_simuhome_bridge_project/
 !/mcp/
 !/_tools/
 !/context/
@@ -25,7 +25,7 @@ __pycache__/
 /mcp/outputs/
 
 # 运行时日志：桥接进程还在跑，日志每几秒就变；保留操作记录，忽略标准输出与错误
-/simuhome_bridge_project/logs/*.log
+/old_simuhome_bridge_project/logs/*.log
 
 # 本地机密：HA 长期令牌、MCP 令牌等，永不入库
 /_secrets/

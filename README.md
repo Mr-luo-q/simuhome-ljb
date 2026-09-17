@@ -7,7 +7,7 @@
 ```text
 finally new paper\        论文讨论与设计文档、benchmark 与方法论文整理、架构图
 ha_mcp_server\            自建 MCP server 项目（计划与后续代码）
-simuhome_bridge_project\  早期 SimuHome×HA 桥接工程（历史参考，不再扩展）
+old_simuhome_bridge_project\  早期 SimuHome×HA 桥接工程（历史参考，不再扩展）
 mcp\                      早期 MCP 实验代码与文档（不含 .venv 与 outputs）
 _tools\                   本地工具：MQTT 相关包说明、架构探针脚本
 context\                  跨会话上下文与笔记

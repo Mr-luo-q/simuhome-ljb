@@ -1,3 +1,8 @@
+# 项目名固定：目录已改名为 old_simuhome_bridge_project，
+# 显式声明 name 后，compose 的项目身份仍然是 simuhome_bridge_project，
+# 不会因为目录改名而与正在运行的 homeassistant 容器冲突
+name: simuhome_bridge_project
+
 services:
   homeassistant:
     container_name: homeassistant
