@@ -250,15 +250,21 @@ entity_id（对外使用的规范名）
 `steps` 记录真实发生的每一步，例如空调开制冷是 `["On", "SystemMode=3"]`——档位属性有上电依赖，
 发布器先补一条开机并把这一步暴露出来，不做隐式修改。
 
-### 4.3 设备能力与物理效应
+注意这是两层命名，不要求同名：主题是发布器层的契约（`target_temp`、`percent`、`set_mode`），
+模型层看到的是统一动作与状态字段（`target`、`level`、`set_mode`）。改一层不要顺手改另一层。
+
+### 4.3 设备动作与物理效应
 
 ```text
-域        动作与取值范围                                     SimuHome 落点
+类别      动作（C 口径，按类别取子集）                        SimuHome 落点
 switch    turn_on / turn_off / toggle                      OnOff 命令（9 台）
-climate   set_mode(off|cool|heat)                          OnOff + Thermostat.SystemMode（2 台）
-          set_temperature(7.00~32.00，步长 0.5)              OccupiedCooling/HeatingSetpoint（0.01°C 整数）
-fan       turn_on / turn_off / set_percentage(0~100)       OnOff + FanControl.PercentSetting（1 台）
+climate   上述 3 个 + set_mode(off|cool|heat)               OnOff 命令 + Thermostat.SystemMode（2 台）
+          + set_temperature(7~32，步长 0.5)                  OccupiedCooling/HeatingSetpoint（0.01°C 整数）
+fan       上述 3 个 + set_percentage(0~100)                 OnOff 命令 + FanControl.PercentSetting（1 台）
 sensor    只读                                             房间温湿度 / 照度 / PM10、虚拟时间
+
+代码现状（2026-09-18）：switch 3 个 / climate 2 个 / fan 3 个；
+climate 的 on_off 三件套与 fan 的 toggle 在 M3 补齐，补完就是 3 / 5 / 4
 ```
 
 约束与物理速率（读 SimuHome 源码得到，决定任务的时间尺度）：
@@ -314,7 +320,7 @@ name / params / returns / errors / time_semantics
 | `inspect_device` | `device_id` | 设备元信息 + 六个状态字段 + 该设备的动作清单 | 状态字段固定 6 个（见下）；动作与范围取设备自报值（空调 7~32/0.5、风扇 0~100/1） | `inspect_device` |
 | `execute_action` | `device_id`、`action`、参数 | 执行结果与回执 | 规范动作 → 服务调用；执行前查可用性；回读 500 ms × 3 | `execute_device_action` |
 | `time_control` | `op`（advance / schedule / list / cancel）、参数 | 快照或预约 id | advance 真等（超时 30 s）；schedule 走 runtime 调度器 | `wait_for_event` + 预约类 |
-| `check_goal` | 条件列表 | 每条是否满足 | 目标命名空间 `<room>.<metric>` / `<device_id>.<attr>` | `check_goal_state` |
+| `check_goal` | `conditions`（必填）、`keep`（可选） | 两组条件各自的判定结果 | `conditions` 是目标条件、`keep` 是必须保持不变的条件（对齐两篇的"无关状态保持"）；目标命名空间 `<room>.<metric>` / `<device_id>.<attr>` | `check_goal_state` |
 | `query_events` | 时间窗、可选实体 | 事件序列 | logbook + 两层默认过滤（只看本家庭、排除虚拟时间），显式实体时全关 | `query_events`（扩展项） |
 | `memory` | `op`（read / write）、`key`、可选 `value` | 记忆内容 | sqlite memory 表 | `memory_read` / `memory_write`（扩展项） |
 
@@ -371,9 +377,10 @@ NOT_IMPLEMENTED     该工具本阶段还没实现（M1 会出现，逐步消失
 建表      启动时读 WS config/entity_registry/list + config/device_registry/list，
           生成 {device_id → entity_id, domain, area_id, category, unique_id}；
           实体自身 area_id 为 None，房间经 device 取
-动作判定  domain + 属性 → 该设备支持哪些动作：switch/light/fan/climate 给 on_off 三件套；
-          climate 另有 set_mode 与 set_temperature（范围取状态里的 min_temp/max_temp/target_temp_step）；
-          fan 另有 set_percentage（0~100，步长取 percentage_step）；
+动作判定  domain + 属性 → 该设备支持哪些动作：switch/light/fan/climate 都给 on_off 三件套；
+          climate 另有 set_mode 与 set_temperature，范围取**实体属性**里的
+          min_temp / max_temp / target_temp_step（不是从六个状态字段里取，状态字段只放当前值）；
+          fan 另有 set_percentage（0~100，步长取实体属性 percentage_step）；
           light 有 brightness 属性时给 set_brightness；cover 有 current_position 时给 set_position
           不依赖 get_services_for_target（它只给服务名还混着管理员服务，supported_features 对 switch 为 null）
 动作      规范动作 → HA 服务；无对应服务返回 UNSUPPORTED_ACTION；
@@ -532,13 +539,15 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
        check_goal(kitchen.temperature lt 24) → pass=false
 交付   写路径与判定路径的契约测试；一次真实 HA 的端到端记录
 口径   状态字段按 §5.2 的六个（on/mode/target/level/position/current）；
-       inspect_device 的状态摘要要同步改成这六个字段（M2 那版还带着
-       target_temperature / min_temperature / percentage 等旧键名，M3 一并换掉）
+        inspect_device 的状态摘要要同步改成这六个字段（M2 那版还带着
+        target_temperature / min_temperature / percentage 等旧键名，M3 一并换掉）
 待补   ACTIONS_BY_KIND 与 C 的口径差三个动作：climate 缺 on_off 三件套、fan 缺 toggle。
         实测当前是 switch 3 个 / climate 2 个 / fan 3 个，C 要求 3 / 5 / 4；
         补法是加三条声明 + HA 侧的 climate.toggle、fan.toggle 映射（这两个服务 HA 都提供），
         沙盒侧仍是同一个 OnOff 命令。验收时按"每类设备的动作数"核对：
         switch 3、climate 5、fan 4（当前无设备的 set_brightness / set_position 不计）
+        check_goal 的契约要加 keep 参数（现在只有 conditions），
+         否则 §6 承诺的"无关状态保持"没有落点，两篇论文的评测口径也对不上
 ```
 
 ### 7.4 M4 时间与记忆（约 1 天）
@@ -738,7 +747,7 @@ M5 要填的验收表：
 | inspect_device | 逐类动作数 | switch 3 / climate 5 / fan 4 | | |
 | time_control(advance) | advance(5 s) 后 inspect | 返回快照，超时 30 s 记 VERIFY_TIMEOUT | | |
 | time_control(schedule) | 10 秒后关灯 | 到点执行成功 | | |
-| check_goal | kitchen.temperature lt 24 | pass=false | | |
+| check_goal | conditions=[kitchen.temperature lt 24]、keep=[living_room.temperature lt 28] | 目标不成立、保持条件成立，两组各自标 pass | | |
 | query_events（扩展） | 近 8 小时 | 非空、不含虚拟时间、实体都在本家庭前缀内 | | |
 | memory（扩展） | 写后读 | 内容一致 | | |
 
