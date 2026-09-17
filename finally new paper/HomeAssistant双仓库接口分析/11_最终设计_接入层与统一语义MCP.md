@@ -111,7 +111,7 @@ D:\D_coderesource\simuhome\                    工作区根目录（★ = git �
 │  │  └─ start_publisher.ps1 / stop_publisher.ps1
 │  └─ logs\                                    broker.log / mosquitto.log / publisher.console.err.log（gitignore）
 │
-├─★ ha_mcp_server\                             【待实现】统一语义 MCP server
+├─★ ha_mcp_server\                             【M1+M2 已实现】统一语义 MCP server（M3 起待做）
 │  ├─ PLAN.md / README.md                      计划与文档地图
 │  ├─ pyproject.toml                           依赖 pin（mcp==1.26.0）+ entry point ha-mcp
 │  ├─ config.example.yaml                      ${VAR} 占位符配置模板
@@ -160,7 +160,7 @@ D:\D_coderesource\simuhome\                    工作区根目录（★ = git �
 │  ├─ reset_simuhome_home.ps1                  仍在用：重置仿真场景
 │  └─ bridge\app.py 等                          已停用（:8010 未监听）
 │
-├─★ finally new paper\                         研究文档与文献（含本目录 01~11 号设计文档）
+├─★ finally new paper\                         研究文档与文献（本目录 01~06、08~12；UbiComp 目录另有 1~9 与 12_投稿策略）
 ├─★ context\                                   跨会话上下文
 ├─★ README.md / source.md / AGENTS.md
 │
@@ -380,6 +380,7 @@ NOT_IMPLEMENTED     该工具本阶段还没实现（M1 会出现，逐步消失
 建表      启动时读 WS config/entity_registry/list + config/device_registry/list，
           生成 {device_id → entity_id, domain, area_id, category, unique_id}；
           实体自身 area_id 为 None，房间经 device 取
+          （area_id 是 HA 侧字段名，对外给模型时叫 room_id；category 在代码里叫 kind）
 动作判定  domain + 属性 → 该设备支持哪些动作：switch/light/fan/climate 都给 on_off 三件套；
           climate 另有 set_mode 与 set_temperature，范围取**实体属性**里的
           min_temp / max_temp / target_temp_step（不是从六个状态字段里取，状态字段只放当前值）；
@@ -596,8 +597,8 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 
 按「职责 / 输入 / 输出 / 读取 / 写入 / 不负责 / 对应文件」写，实现时逐条对照。
 
-计数与文档规则：`src\` 22 个 `.py` + `tests\` 7 个 `.py` = 29 个，加 `pyproject.toml`、
-`README.md`、`config.example.yaml` 三个根文件共 32 个；每个 `.py` 另配一份同名中文 `.md`
+计数与文档规则：`src\` 22 个 `.py`（已全部落地）+ `tests\` 目标 7 个（当前 5 个，待补 3 个单测随 M3/M4），
+加 `pyproject.toml`、`README.md`、`config.example.yaml` 三个根文件；每个 `.py` 另配一份同名中文 `.md`
 （如 `observe_home.py` → `observe_home.md`），解释输入输出与职责，改代码必须同步改文档。
 
 ### 8.1 publisher.py
@@ -616,7 +617,7 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 
 ```text
 职责      生成 switch / climate / fan / sensor 的 discovery 配置；集中定义全部主题名
-输入      device_id、房间元信息、指标定义、能力参数（温度范围、档位范围）、前缀
+输入      device_id、房间元信息、指标定义、动作参数（温度范围、档位范围）、前缀
 输出      discovery 主题与配置 dict；状态 / 命令主题名的构造函数
 读取/写入 无（纯函数，不发消息）
 不负责    不连 MQTT、不发 retained、不做限流
@@ -753,6 +754,7 @@ M5 要填的验收表：
 | check_goal | conditions=[kitchen.temperature lt 24]、keep=[living_room.temperature lt 28] | 目标不成立、保持条件成立，两组各自标 pass | | |
 | query_events（扩展） | 近 8 小时 | 非空、不含虚拟时间、实体都在本家庭前缀内 | | |
 | memory（扩展） | 写后读 | 内容一致 | | |
+| 动作覆盖率报告 | 8 个动作 × 2 个后端 | HA 侧 6 个已验证、2 个标"当前无设备"；沙盒未建 | | |
 
 环境侧的自检（改过接入层后跑）：
 
