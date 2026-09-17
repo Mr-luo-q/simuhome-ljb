@@ -15,7 +15,7 @@ doors: []                       # 当前没有门磁实体，inspect_room 的 do
 
 execution:
   verify_after_action: true
-  verify_delay_ms: 500          # 实测一次命令 + 回读 280~388 ms，300 ms 会误判
+  verify_delay_ms: 500          # 实测一次命令 + 回读 236~388 ms，300 ms 会误判
   verify_attempts: 3
 
 events:

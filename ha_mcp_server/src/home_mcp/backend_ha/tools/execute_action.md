@@ -16,5 +16,5 @@
 ```text
 规范动作 → HA 服务：turn_on/turn_off/toggle、climate.set_temperature、fan.set_percentage
 执行前先读状态：unavailable / unknown → DEVICE_UNAVAILABLE，不发服务调用
-回读用 verify_delay_ms=500、attempts=3（实测一次命令 + 回读 280~388 ms）
+回读用 verify_delay_ms=500、attempts=3（实测一次命令 + 回读 236~388 ms）
 ```

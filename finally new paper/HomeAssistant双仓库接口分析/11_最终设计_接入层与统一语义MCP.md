@@ -9,7 +9,8 @@
 ```
 
 文档关系：01~10 是过程记录与选型讨论（含已退役方案），冲突之处以本文为准；实现只看这一份，
-不需要回看任何旧文档。本文所有数字都是 2026-09-17 在本机实测得到的，不是设计意图。
+不需要回看任何旧文档。本文数字都是 2026-09-17 ~ 09-18 在本机实测得到的，不是设计意图；
+标注了日期的以标注为准，未标日期的是最近一次实测值（改设计前重新核一遍）。
 
 ## 1. 目标与边界
 
@@ -53,9 +54,11 @@ SimuHome        :8000，15 台设备 / 3 房间（living_room、kitchen、utilit
                 device_id 前缀不可靠：utility 房间是 utility_ac / utility_light，
                 与 living_room_* / kitchen_* 的写法不一致
 
-命令时延         MQTT 命令 → 发布器 → SimuHome → 回读：280~388 ms（三次实测）
+命令时延         MQTT 命令 → 发布器 → SimuHome → 回读：236~388 ms（多次实测：空调设温度 236/280、
+                空调设模式 258/373、风扇设档 236/388）
 时间语义         虚拟时钟按 1:1 真实时间推进（实测 20.0 s 对 20.0 s），HA 侧无法快进
-logbook          近 8 小时 3107 条，其中 2820 条来自虚拟时间传感器（91%）
+logbook          近 8 小时 3107~9599 条，其中虚拟时间传感器占 91%~96%
+                （两次实测：2820/3107 于 09-17、9271/9599 于 09-18；非虚拟时间约 300 条）
 recorder         12 项环境量统计 has_mean=True（state_class=measurement 生效）
 
 能力接口          get_services_for_target 只返回服务名列表，且会混入 homeassistant.reload_config_entry
@@ -390,7 +393,7 @@ NOT_IMPLEMENTED     该工具本阶段还没实现（M1 会出现，逐步消失
 目标      check_goal 的目标命名空间：<room>.<metric>（环境量）、<device_id>.<attribute>（设备属性）
 事件      query_events 走 logbook，默认排除 sensor.simuhome_virtual_time
 可用性    调用前读状态，见 5.3
-回读      verify_delay_ms = 500、attempts = 3（实测一次命令 + 回读 280~388 ms）
+回读      verify_delay_ms = 500、attempts = 3（实测一次命令 + 回读 236~388 ms）
 ```
 
 ### 5.5 配置格式
@@ -714,7 +717,7 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 
 ```text
 没有拓扑       T1 空间任务测不了；0 个门磁实体，inspect_room 的 doors 恒为 null
-能力面有限      12 台可控设备 = 9 switch + 2 climate + 1 fan；没有 light / cover
+动作面有限      12 台可控设备 = 9 switch + 2 climate + 1 fan；没有 light / cover
 advance 耗时    虚拟时钟 1:1，HA 侧 advance 就是真等；长时序任务只能放沙盒后端
 掉线假成功      发布器掉线后实体变 unavailable，但 HA 仍会发命令到主题，
                 必须靠 DEVICE_UNAVAILABLE 前置检查兜住
