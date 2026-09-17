@@ -1,6 +1,6 @@
 # source.md
 
-本文件由 `_tools/update_source.py` 自动生成，最后更新：2026-09-17 20:15。
+本文件由 `_tools/update_source.py` 自动生成，最后更新：2026-09-17 20:44。
 
 仓库只跟踪下面第一张表里的目录；第二、三张表里的内容不入库，只登记来源与体积。
 
@@ -10,7 +10,7 @@
 | --- | --- | --- | --- | --- |
 | `finally new paper` | 论文讨论与设计文档、benchmark 与方法论文整理、架构图 | 122.3 MB | 230 | 2026-09-16 |
 | `ha_mcp_server` | 自建 MCP server 项目（当前只有长期计划与说明） | 0.0 MB | 2 | 2026-09-17 |
-| `simuhome_mqtt_publisher` | MQTT 接入工程：broker 配置与启动脚本，发布器（M2 待实现） | 0.1 MB | 31 | 2026-09-17 |
+| `simuhome_mqtt_publisher` | MQTT 接入工程：broker 配置与启动脚本，发布器（M2 待实现） | 0.1 MB | 37 | 2026-09-17 |
 | `simuhome_bridge_project` | 早期 SimuHome×HA 桥接工程（保留作历史参考，不再扩展） | 0.7 MB | 12 | 2026-06-21 |
 | `mcp` | 早期 MCP 实验代码与文档（不含 .venv） | 75.4 MB | 6381 | 2026-08-31 |
 | `_tools` | 本地工具与探针：MQTT broker 包、架构探针脚本（安装包与 wheels 不入库） | 29.9 MB | 30 | 2026-09-17 |

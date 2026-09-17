@@ -32,6 +32,10 @@ __pycache__/
 # MQTT 工程的运行时日志
 /simuhome_mqtt_publisher/logs/
 
+# MQTT 凭据与密码文件
+/simuhome_mqtt_publisher/broker/mosquitto.credentials.txt
+/simuhome_mqtt_publisher/broker/mosquitto.passwd
+
 # 明确排除的外部大目录（本来也不会被放行，写出来是为了可读）
 /.git_old_20260917/
 /.claude/
