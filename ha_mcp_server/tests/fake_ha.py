@@ -57,8 +57,10 @@ STATES: list[dict[str, Any]] = [
     {"entity_id": "switch.simuhome_living_room_tv", "state": "off", "attributes": {}},
     {"entity_id": "climate.simuhome_living_room_ac", "state": "off",
      "attributes": {"hvac_modes": ["off", "cool", "heat"], "temperature": 24.0,
-                    "current_temperature": 26.0}},
-    {"entity_id": "fan.simuhome_kitchen_fan", "state": "off", "attributes": {"percentage": 0}},
+                    "current_temperature": 26.0, "min_temp": 7.0, "max_temp": 32.0,
+                    "target_temp_step": 0.5}},
+    {"entity_id": "fan.simuhome_kitchen_fan", "state": "off",
+     "attributes": {"percentage": 0, "percentage_step": 1.0}},
     {"entity_id": "sensor.simuhome_living_room_temperature", "state": "26",
      "attributes": {"device_class": "temperature", "unit_of_measurement": "°C"}},
     {"entity_id": "sensor.simuhome_living_room_humidity", "state": "45",
@@ -71,14 +73,46 @@ STATES: list[dict[str, Any]] = [
      "attributes": {}},
 ]
 
+# logbook 节选：两条开关变化 + 一条虚拟时间 + 一条外部集成事件（验证两层默认过滤）
+LOGBOOK: list[dict[str, Any]] = [
+    {"when": "2026-09-17T21:40:00+00:00", "entity_id": "switch.simuhome_living_room_tv",
+     "state": "on", "name": "TV"},
+    {"when": "2026-09-17T21:41:00+00:00", "entity_id": "sensor.simuhome_virtual_time",
+     "state": "2025-08-24 09:30:00", "name": "SimuHome 虚拟时间"},
+    {"when": "2026-09-17T21:42:00+00:00", "entity_id": "switch.simuhome_living_room_tv",
+     "state": "off", "name": "TV"},
+    {"when": "2026-09-17T21:43:00+00:00", "entity_id": "update.hacs_update",
+     "state": "off", "name": "HACS Update"},
+]
+
 
 class FakeRestClient:
-    """只实现 get_states 的假 REST 客户端，供 observe_home 离线测试。"""
+    """假 REST 客户端：状态、单实体状态与 logbook 三件事，供只读工具离线测试。"""
 
-    def __init__(self, states: list[dict[str, Any]] | None = None) -> None:
+    def __init__(
+        self,
+        states: list[dict[str, Any]] | None = None,
+        logbook: list[dict[str, Any]] | None = None,
+    ) -> None:
         self._states = states if states is not None else STATES   # 可注入别的状态
+        self._logbook = logbook if logbook is not None else LOGBOOK
 
     def get_states(self) -> list[dict[str, Any]]:
         """返回夹具里的状态列表。"""
 
         return list(self._states)
+
+    def get_state(self, entity_id: str) -> dict[str, Any]:
+        """返回单个实体状态；查不到返回空字典。"""
+
+        for item in self._states:
+            if item.get("entity_id") == entity_id:
+                return dict(item)
+        return {}
+
+    def get_logbook(self, since: str, entity_id: str | None = None, end_time: str | None = None):
+        """返回夹具 logbook；给了 entity_id 就只返回该实体的记录。"""
+
+        if entity_id:
+            return [dict(item) for item in self._logbook if item.get("entity_id") == entity_id]
+        return [dict(item) for item in self._logbook]

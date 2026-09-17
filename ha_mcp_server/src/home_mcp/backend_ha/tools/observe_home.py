@@ -8,22 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..mapping import metric_of
-
-
-def _to_number(value: Any) -> float | int | None:
-    """把状态字符串转成数值；转不动或不可用时返回 None。"""
-
-    if value is None:
-        return None
-    text = str(value)
-    if text in ("unknown", "unavailable", ""):
-        return None
-    try:
-        number = float(text)
-    except ValueError:
-        return None
-    return int(number) if number.is_integer() else number
+from ..mapping import collect_env
 
 
 def run(context: Any, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -34,18 +19,9 @@ def run(context: Any, arguments: dict[str, Any]) -> dict[str, Any]:
 
     rooms: dict[str, Any] = {}
     for area_id, area_name in context.view.areas.items():
-        env: dict[str, Any] = {}
-        for entity_id in context.view.sensors_by_area.get(area_id, []):
-            state = by_id.get(entity_id)
-            metric = metric_of(state)
-            if metric is None or metric in env:
-                continue
-            value = _to_number((state or {}).get("state"))
-            if value is not None:
-                env[metric] = value
         rooms[area_id] = {
             "name": area_name,
-            "env": env,
+            "env": collect_env(by_id, context.view.sensors_by_area.get(area_id, [])),
             "devices": context.view.devices_in_area(area_id),
         }
 

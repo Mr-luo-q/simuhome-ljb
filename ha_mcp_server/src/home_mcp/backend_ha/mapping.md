@@ -24,3 +24,16 @@
 
 其它：`simuhome_virtual_time` 单独记为 `time_entity`；其余 `simuhome_` 开头的实体
 按设备所属房间归到 `sensors_by_area`，供环境量聚合使用。
+
+## 三个取值辅助函数
+
+```text
+to_number(value)              状态字符串 → 数值；unknown / unavailable / 空 → None
+collect_env(by_id, entity_ids) 一个房间的传感器实体 → {temperature, humidity, illuminance, pm10}
+summarize_state(kind, state)   实体状态 → 对模型有意义的字段：
+                               climate 给模式 / 设定点 / 当前温度 / 设备自报的温度范围，
+                               fan 给开关与档位，switch 给开关
+```
+
+范围优先取设备自报值（实测 climate 的 state 里带 min_temp=7.0、max_temp=32.0、
+target_temp_step=0.5；fan 带 percentage_step=1.0），取不到时才落到契约里的默认值。

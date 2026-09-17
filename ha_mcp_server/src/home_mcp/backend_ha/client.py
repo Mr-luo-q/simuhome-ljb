@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any
 
@@ -77,6 +78,23 @@ class HaRestClient:
         """读全部服务及其参数 schema。"""
 
         return self._request("/api/services") or []
+
+    def get_logbook(
+        self,
+        since: str,
+        entity_id: str | None = None,
+        end_time: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """读 logbook：since 之后的事件，可按实体过滤、可给结束时间。"""
+
+        params: dict[str, str] = {}
+        if entity_id:
+            params["entity"] = entity_id
+        if end_time:
+            params["end_time"] = end_time
+        query = f"?{urllib.parse.urlencode(params)}" if params else ""
+        path = f"/api/logbook/{urllib.parse.quote(str(since))}{query}"
+        return self._request(path) or []
 
     def call_service(
         self,

@@ -15,7 +15,8 @@
 实现要点：
 
 ```text
-环境量按 device_class 识别（temperature / humidity / illuminance / pm10），不写死实体 id
+环境量按 device_class 识别（temperature / humidity / illuminance / pm10），不写死实体 id；
+聚合走 mapping.collect_env，与 inspect_room 共用同一段逻辑
 invalid 状态（unknown / unavailable）跳过，不出现在 env 里
 设备清单来自注册表视图，房间归属只认设备注册表的 area_id
 ```

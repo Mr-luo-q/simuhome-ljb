@@ -1,4 +1,4 @@
-"""端到端脚本：起 stdio 服务，列工具、调 observe_home、确认其余工具尚未实现。
+"""端到端脚本：起 stdio 服务，对真 HA 跑 M1+M2 的十项验收。
 
 手动运行，需要 HA 在跑、config.yaml 与 HA_TOKEN 就绪：
     python tests\\test_e2e_real_ha.py --config config.yaml
@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import datetime as dt
 import json
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -21,56 +23,154 @@ from mcp import ClientSession, StdioServerParameters          # noqa: E402
 from mcp.client.stdio import stdio_client                     # noqa: E402
 
 
+HOME_PREFIXES = ("switch.simuhome", "sensor.simuhome", "climate.simuhome", "fan.simuhome")
+
+
+def call_payload(result: Any) -> dict[str, Any]:
+    """把一次 tools/call 的返回解析成统一外壳。"""
+
+    text = result.content[0].text if result.content else "{}"
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return {"ok": False, "error": {"code": "BAD_PAYLOAD", "message": text[:200]}}
+
+
+def hours_ago(hours: float) -> str:
+    """返回若干小时前的 ISO 时间，供 logbook 查询用。"""
+
+    return (dt.datetime.now().astimezone() - dt.timedelta(hours=hours)).isoformat()
+
+
 async def run_check(config_path: Path) -> int:
-    """起服务并跑四项检查，返回失败计数。"""
+    """起服务并跑十项检查，返回失败计数。"""
 
     parameters = StdioServerParameters(
         command=sys.executable,
         args=["-m", "home_mcp.entry", "--config", str(config_path)],
         env={**os.environ, "PYTHONPATH": str(PROJECT_ROOT / "src")},
     )
-    failures = 0
+    checks: list[tuple[str, bool, str]] = []
+
+    def record(name: str, ok: bool, detail: str = "") -> None:
+        """登记一项检查结果。"""
+
+        checks.append((name, ok, detail))
+
     async with stdio_client(parameters) as (read_stream, write_stream):
         async with ClientSession(read_stream, write_stream) as session:
             await session.initialize()
 
+            # ── M1：工具清单与全屋快照 ─────────────────────────
             tools = await session.list_tools()
             names = [tool.name for tool in tools.tools]
-            ok_tools = len(names) == 8
-            failures += 0 if ok_tools else 1
-            print(f"[{'通过' if ok_tools else '失败'}] tools/list：{len(names)} 个工具 {names}")
+            record("tools/list 返回 8 个工具", len(names) == 8, str(names))
 
-            result = await session.call_tool("observe_home", {})
-            payload = json.loads(result.content[0].text)
-            rooms = payload.get("data", {}).get("rooms", {})
-            metrics = payload.get("data", {}).get("counts", {}).get("metrics", [])
-            ok_home = bool(payload.get("ok")) and len(rooms) == 3 and len(metrics) == 4
-            failures += 0 if ok_home else 1
-            print(f"[{'通过' if ok_home else '失败'}] observe_home：{len(rooms)} 个房间，"
-                  f"环境量 {metrics}，时间 {payload.get('data', {}).get('time')}")
-            if ok_home:
-                living = rooms.get("living_room", {})
-                print(f"         living_room：env={living.get('env')} devices={living.get('devices')}")
+            home = call_payload(await session.call_tool("observe_home", {}))
+            rooms = (home.get("data") or {}).get("rooms", {})
+            metrics = (home.get("data") or {}).get("counts", {}).get("metrics", [])
+            record(
+                "observe_home：3 房间 + 4 环境量",
+                bool(home.get("ok")) and len(rooms) == 3 and len(metrics) == 4,
+                f"rooms={len(rooms)} metrics={metrics} time={(home.get('data') or {}).get('time')}",
+            )
 
-            stub = await session.call_tool("memory", {"op": "read", "key": "probe"})
-            stub_payload = json.loads(stub.content[0].text)
-            code = stub_payload.get("error", {}).get("code")
-            ok_stub = stub.isError is True and code == "NOT_IMPLEMENTED"
-            failures += 0 if ok_stub else 1
-            print(f"[{'通过' if ok_stub else '失败'}] memory 未实现：isError={stub.isError} code={code}")
+            stub = call_payload(await session.call_tool("memory", {"op": "read", "key": "probe"}))
+            record(
+                "未实现工具返回 NOT_IMPLEMENTED",
+                (stub.get("error") or {}).get("code") == "NOT_IMPLEMENTED",
+                str(stub.get("error")),
+            )
 
-            unknown = await session.call_tool("no_such_tool", {})
-            unknown_payload = json.loads(unknown.content[0].text)
-            ok_unknown = unknown_payload.get("error", {}).get("code") == "BAD_REQUEST"
-            failures += 0 if ok_unknown else 1
-            print(f"[{'通过' if ok_unknown else '失败'}] 未定义工具：{unknown_payload.get('error')}")
+            unknown = call_payload(await session.call_tool("no_such_tool", {}))
+            record(
+                "未定义工具返回 BAD_REQUEST",
+                (unknown.get("error") or {}).get("code") == "BAD_REQUEST",
+                str(unknown.get("error")),
+            )
 
-    print(f"结论：{'全部通过' if failures == 0 else f'{failures} 项失败'}")
-    return failures
+            # ── M2：只读三件套 ────────────────────────────────
+            room = call_payload(await session.call_tool("inspect_room", {"room_id": "living_room"}))
+            room_data = room.get("data") or {}
+            record(
+                "inspect_room(living_room)：5 台设备 + 4 环境量 + doors=null",
+                bool(room.get("ok"))
+                and len(room_data.get("devices") or []) == 5
+                and len(room_data.get("env") or {}) == 4
+                and room_data.get("doors") is None,
+                f"devices={len(room_data.get('devices') or [])} env={room_data.get('env')}",
+            )
+
+            bad_room = call_payload(await session.call_tool("inspect_room", {"room_id": "garage"}))
+            record(
+                "inspect_room 不存在的房间 → UNKNOWN_ROOM",
+                (bad_room.get("error") or {}).get("code") == "UNKNOWN_ROOM",
+                str(bad_room.get("error")),
+            )
+
+            ac = call_payload(await session.call_tool("inspect_device", {"device_id": "living_room_ac"}))
+            ac_data = ac.get("data") or {}
+            ac_actions = {item["action"]: item for item in ac_data.get("actions", [])}
+            temp_param = (ac_actions.get("set_temperature") or {}).get("params", {}).get("value", {})
+            record(
+                "inspect_device(空调)：模式与 7~32 / 步长 0.5",
+                bool(ac.get("ok"))
+                and set(ac_actions) == {"set_mode", "set_temperature"}
+                and (temp_param.get("minimum"), temp_param.get("maximum"), temp_param.get("step")) == (7.0, 32.0, 0.5),
+                f"state={ac_data.get('state')} actions={sorted(ac_actions)} temp={temp_param}",
+            )
+
+            light = call_payload(
+                await session.call_tool("inspect_device", {"device_id": "living_room_side_light"})
+            )
+            light_actions = {item["action"] for item in (light.get("data") or {}).get("actions", [])}
+            record(
+                "inspect_device(开关)：turn_on / turn_off / toggle",
+                bool(light.get("ok")) and light_actions == {"turn_on", "turn_off", "toggle"},
+                f"actions={sorted(light_actions)}",
+            )
+
+            bad_device = call_payload(await session.call_tool("inspect_device", {"device_id": "ghost"}))
+            record(
+                "inspect_device 不存在的设备 → UNKNOWN_DEVICE",
+                (bad_device.get("error") or {}).get("code") == "UNKNOWN_DEVICE",
+                str(bad_device.get("error")),
+            )
+
+            events = call_payload(await session.call_tool("query_events", {"since": hours_ago(8), "limit": 50}))
+            event_items = (events.get("data") or {}).get("events", [])
+            record(
+                "query_events(近 8 小时)：非空、无虚拟时间、只含本家庭实体",
+                bool(events.get("ok"))
+                and len(event_items) > 0
+                and all("virtual_time" not in (item.get("entity_id") or "") for item in event_items)
+                and all((item.get("entity_id") or "").startswith(HOME_PREFIXES) for item in event_items),
+                f"matched={(events.get('data') or {}).get('counts', {}).get('matched')} "
+                f"returned={len(event_items)}",
+            )
+
+            clock = call_payload(
+                await session.call_tool(
+                    "query_events",
+                    {"since": hours_ago(0.2), "entity_id": "sensor.simuhome_virtual_time", "limit": 5},
+                )
+            )
+            record(
+                "query_events 显式指定虚拟时间 → 不排除、有数据",
+                bool(clock.get("ok")) and len((clock.get("data") or {}).get("events", [])) > 0,
+                f"returned={len((clock.get('data') or {}).get('events', []))}",
+            )
+
+    for name, ok, detail in checks:
+        flag = "通过" if ok else "失败"
+        print(f"[{flag}] {name}" + (f"  —— {detail}" if detail else ""))
+    failed = [name for name, ok, _ in checks if not ok]
+    print(f"结论：{len(checks) - len(failed)} / {len(checks)} 项通过")
+    return 1 if failed else 0
 
 
 def main() -> int:
-    """命令行入口：默认读同目录同级的 config.yaml。"""
+    """命令行入口：默认读项目根下的 config.yaml。"""
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default=str(PROJECT_ROOT / "config.yaml"))

@@ -69,5 +69,5 @@ def not_implemented(tool_name: str) -> HomeMcpError:
     return HomeMcpError(
         ErrorCode.NOT_IMPLEMENTED,
         f"{tool_name} 尚未实现",
-        "当前版本只开放了 observe_home；该工具会在后续版本补齐",
+        "该工具在当前版本尚未开放；可用工具以 tools/list 为准",
     )

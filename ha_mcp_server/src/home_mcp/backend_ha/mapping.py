@@ -94,6 +94,61 @@ def metric_of(state: dict[str, Any] | None) -> str | None:
     return METRIC_BY_DEVICE_CLASS.get(device_class)
 
 
+def to_number(value: Any) -> float | int | None:
+    """把状态字符串转成数值；unknown / unavailable / 空值返回 None。"""
+
+    if value is None:
+        return None
+    text = str(value)
+    if text in ("unknown", "unavailable", ""):
+        return None
+    try:
+        number = float(text)
+    except ValueError:
+        return None
+    return int(number) if number.is_integer() else number
+
+
+def collect_env(by_id: dict[str, dict[str, Any]], entity_ids: list[str]) -> dict[str, Any]:
+    """把一个房间的传感器实体聚成环境量：{temperature, humidity, illuminance, pm10}。"""
+
+    env: dict[str, Any] = {}
+    for entity_id in entity_ids:
+        state = by_id.get(entity_id)
+        metric = metric_of(state)
+        if metric is None or metric in env:
+            continue
+        value = to_number((state or {}).get("state"))
+        if value is not None:
+            env[metric] = value
+    return env
+
+
+def summarize_state(kind: str, entity_state: dict[str, Any] | None) -> dict[str, Any]:
+    """把实体状态压成对模型有意义的几个字段，按设备类型不同。"""
+
+    state = entity_state or {}
+    attributes = state.get("attributes") or {}
+    raw = state.get("state")
+
+    if kind == "climate":
+        return {
+            "mode": raw,                                             # off / cool / heat
+            "target_temperature": attributes.get("temperature"),      # 当前设定点
+            "current_temperature": attributes.get("current_temperature"),
+            "min_temperature": attributes.get("min_temp"),            # 设备自报的范围
+            "max_temperature": attributes.get("max_temp"),
+            "temperature_step": attributes.get("target_temp_step"),
+        }
+    if kind == "fan":
+        return {
+            "on": raw != "off",
+            "percentage": attributes.get("percentage"),
+            "percentage_step": attributes.get("percentage_step"),
+        }
+    return {"on": raw == "on", "raw_state": raw}
+
+
 def build_view(
     entities: list[dict[str, Any]],
     devices: list[dict[str, Any]],

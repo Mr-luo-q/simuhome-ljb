@@ -3,7 +3,8 @@
 自建的 MCP server：对外暴露 8 个工具（观察、控制、时间、验证、记忆），先接 Home Assistant，架构上可替换后端。
 
 ```text
-当前状态    M1 完成：8 个工具都已建出，observe_home 做实并已在真 HA 上跑通，其余 7 个返回 NOT_IMPLEMENTED
+当前状态    M1+M2 完成：8 个工具都已建出；observe_home / inspect_room / inspect_device /
+           query_events 四个只读工具做实并在真 HA 上跑通；其余 4 个返回 NOT_IMPLEMENTED
 设计文档    ..\finally new paper\HomeAssistant双仓库接口分析\11_最终设计_接入层与统一语义MCP.md
 长期计划    PLAN.md（M1~M5 的进度与分期）
 解耦验证    ..\finally new paper\HomeAssistant双仓库接口分析\_架构探针\（六项报告）
@@ -52,10 +53,13 @@ C:\ProgramData\anaconda3\python.exe tests\test_llm_smoke.py --config config.yaml
 ```text
 tools/list     8 个工具
 observe_home   3 个房间、4 项环境量、虚拟时间；living_room 列出 5 台设备
-其余 7 个工具   返回 NOT_IMPLEMENTED（契约测试逐个验过）
+inspect_room   5 台设备 + 4 环境量 + doors=null；房间不存在 → UNKNOWN_ROOM
+inspect_device 动作与参数范围（空调 7~32 / 步长 0.5，取设备自报值）；设备不存在 → UNKNOWN_DEVICE
+query_events   两层默认过滤（只看本家庭、排除虚拟时间）；近 8 小时 239 条匹配、返回 50 条
+其余 4 个工具   返回 NOT_IMPLEMENTED（契约测试逐个验过）
 契约强制        后端少实现或多实现工具时启动期报错
 协议壳词汇检查    server.py / entry.py / contract\__init__.py 无后端词汇
 大模型冒烟      deepseek-flash 两轮 8/8：第 1 轮命中 observe_home 并给出中文汇总；
-               第 2 轮先查再动（inspect_room → observe_home → inspect_device → execute_action），
+               第 2 轮先查再动（inspect_room → inspect_device → execute_action），
                遇到 NOT_IMPLEMENTED 如实说明，没有谎报"已打开"
 ```

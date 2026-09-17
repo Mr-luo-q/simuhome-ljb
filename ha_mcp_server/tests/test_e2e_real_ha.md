@@ -2,25 +2,37 @@
 
 ## 功能
 
-端到端脚本：用 MCP 客户端按 stdio 起真实服务，跑四项验收。
+端到端脚本：用 MCP 客户端按 stdio 起真实服务，对真 HA 跑 M1+M2 的十一项验收。
 
 ```text
 输入   --config 路径（默认 ha_mcp_server\config.yaml）；环境里要有 HA_TOKEN
-输出   逐项结果与「全部通过 / n 项失败」，退出码 = 失败项数
+输出   逐项结果与「n / 11 项通过」，退出码 = 失败项数
 读取   真实 HA 的三张注册表与状态（经 MCP 服务）
 写入   无（只调只读工具；未实现工具被拒绝）
 不负责   不启动 HA 与 broker，不验证写路径（M3 再加）
 对应   tests\test_e2e_real_ha.py
 ```
 
-## 四项检查
+## 十一项检查
 
 ```text
-tools/list      返回 8 个工具
-observe_home    3 个房间、4 项环境量、带虚拟时间
-memory          未实现 → isError=true 且 code=NOT_IMPLEMENTED
-未定义工具        → code=BAD_REQUEST
+M1 协议与快照
+  tools/list                     返回 8 个工具
+  observe_home                   3 个房间、4 项环境量、带虚拟时间
+  未实现工具（memory）             isError=true 且 code=NOT_IMPLEMENTED
+  未定义工具                        code=BAD_REQUEST
+M2 只读三件套
+  inspect_room(living_room)      5 台设备 + 4 环境量 + doors=null
+  inspect_room(garage)           不存在的房间 → UNKNOWN_ROOM
+  inspect_device(空调)            动作 set_mode/set_temperature，温度 7~32、步长 0.5
+  inspect_device(开关)            turn_on / turn_off / toggle
+  inspect_device(ghost)          不存在的设备 → UNKNOWN_DEVICE
+  query_events(近 8 小时)         非空、无虚拟时间、实体都在本家庭前缀内
+  query_events(显式虚拟时间)       显式请求不排除，返回时钟记录
 ```
+
+注：`query_events` 的窗口取近 8 小时，是因为安静时段近 10 分钟可能一条都没有
+（实测近 1 小时 10 条、近 8 小时 328 条非虚拟时间记录）。
 
 ## 运行
 

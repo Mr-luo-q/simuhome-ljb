@@ -21,6 +21,18 @@ class ParamSpec:
     enum: tuple[str, ...] = ()     # 枚举取值，空表示不限
     items: dict[str, Any] | None = None        # array 的元素 schema（JSON Schema 片段）
     properties: dict[str, Any] | None = None   # object 的字段 schema
+    minimum: float | None = None   # 数值下限（动作参数用）
+    maximum: float | None = None   # 数值上限
+    step: float | None = None      # 步长，如空调 0.5°C
+
+
+@dataclass(frozen=True)
+class ActionSpec:
+    """一台设备支持的一个动作：动作名、参数、说明。"""
+
+    name: str                              # 规范动作名，如 set_temperature
+    params: tuple[ParamSpec, ...] = ()     # 动作参数
+    description: str = ""                  # 面向模型的一句话说明
 
 
 @dataclass(frozen=True)
@@ -173,6 +185,60 @@ TOOLS: tuple[ToolSpec, ...] = (
     ),
 )
 
+# 规范动作表：按设备类型给出可用动作与参数范围，inspect_device 返回它、execute_action 按它校验
+ACTIONS_BY_KIND: dict[str, tuple[ActionSpec, ...]] = {
+    "switch": (
+        ActionSpec("turn_on", (), "打开设备"),
+        ActionSpec("turn_off", (), "关闭设备"),
+        ActionSpec("toggle", (), "在当前状态上取反"),
+    ),
+    "climate": (
+        ActionSpec(
+            "set_mode",
+            (ParamSpec("mode", "string", True, "目标模式", ("off", "cool", "heat")),),
+            "切换空调模式（off 等于关机）",
+        ),
+        ActionSpec(
+            "set_temperature",
+            (ParamSpec("value", "number", True, "目标温度（摄氏度）", minimum=7, maximum=32, step=0.5),),
+            "设定目标温度；制冷模式写制冷设定点，制热模式写制热设定点",
+        ),
+    ),
+    "fan": (
+        ActionSpec("turn_on", (), "打开风扇"),
+        ActionSpec("turn_off", (), "关闭风扇"),
+        ActionSpec(
+            "set_percentage",
+            (ParamSpec("value", "integer", True, "档位百分比，0 等于关机", minimum=0, maximum=100, step=1),),
+            "设置风扇档位",
+        ),
+    ),
+}
+
+
+def actions_for_kind(kind: str) -> tuple[ActionSpec, ...]:
+    """按设备类型取可用动作；没有该类型时返回空元组。"""
+
+    return ACTIONS_BY_KIND.get(kind, ())
+
+
+def action_payload(action: ActionSpec) -> dict[str, Any]:
+    """把一个动作翻成对外返回的结构（inspect_device 用）。"""
+
+    params: dict[str, Any] = {}
+    for param in action.params:
+        entry: dict[str, Any] = {"type": param.type, "description": param.description}
+        if param.enum:
+            entry["enum"] = list(param.enum)
+        if param.minimum is not None:
+            entry["minimum"] = param.minimum
+        if param.maximum is not None:
+            entry["maximum"] = param.maximum
+        if param.step is not None:
+            entry["step"] = param.step
+        params[param.name] = entry
+    return {"action": action.name, "description": action.description, "params": params}
+
 
 def to_json_schema(spec: ToolSpec) -> dict[str, Any]:
     """把一个 ToolSpec 的参数列表转成 MCP 需要的 JSON Schema。"""
@@ -190,6 +256,12 @@ def to_json_schema(spec: ToolSpec) -> dict[str, Any]:
             # object 带上字段声明，避免被当成空对象
             entry["properties"] = param.properties or {}
             entry["additionalProperties"] = True
+        if param.minimum is not None:
+            entry["minimum"] = param.minimum
+        if param.maximum is not None:
+            entry["maximum"] = param.maximum
+        if param.step is not None:
+            entry["multipleOf"] = param.step
         properties[param.name] = entry
         if param.required:
             required.append(param.name)

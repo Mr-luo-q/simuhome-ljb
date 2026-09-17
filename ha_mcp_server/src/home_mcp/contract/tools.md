@@ -50,3 +50,17 @@ memory          长期记忆读写
 
 注意：`NOT_IMPLEMENTED` 写进了每个工具的错误列表，它是分期实现的产物（M1 只做实
 `observe_home`），M4 完成后会从契约里删掉。
+
+## 规范动作表（ACTIONS_BY_KIND）
+
+同一份动作定义供两个工具用：`inspect_device` 返回它给模型看，`execute_action` 按它校验。
+
+```text
+switch    turn_on / turn_off / toggle
+climate   set_mode(off|cool|heat)
+          set_temperature(value: 7~32，步长 0.5)
+fan       turn_on / turn_off / set_percentage(value: 0~100，步长 1)
+```
+
+`ParamSpec` 的 minimum / maximum / step 会同时写进 JSON Schema（minimum / maximum / multipleOf），
+所以模型在 tools/list 阶段就能看到取值范围。

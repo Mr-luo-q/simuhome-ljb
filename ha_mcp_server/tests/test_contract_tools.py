@@ -15,15 +15,34 @@ sys.path.insert(0, str(PROJECT_ROOT))           # 让 tests 包可导入（直�
 
 from home_mcp import server as shell                                   # noqa: E402
 from home_mcp.contract import TOOLS, evaluate_condition, to_json_schema  # noqa: E402
-from home_mcp.errors import ErrorCode, HomeMcpError, MissingToolsError, not_implemented  # noqa: E402
+from home_mcp.errors import (                                          # noqa: E402
+    ErrorCode,
+    HomeMcpError,
+    MissingToolsError,
+    not_implemented,
+)
 from home_mcp.backend_ha.mapping import (                              # noqa: E402
     build_view,
     logical_id_from_identifiers,
     split_unique_id,
 )
-from home_mcp.backend_ha.tools import observe_home                     # noqa: E402
+from home_mcp.backend_ha.tools import (                                # noqa: E402
+    inspect_device,
+    inspect_room,
+    observe_home,
+    query_events,
+)
 from home_mcp.runtime import ConfigError, load_config                  # noqa: E402
 from tests.fake_ha import AREAS, DEVICES, ENTITIES, FakeRestClient     # noqa: E402
+
+
+class FixtureContext:
+    """测试用上下文：假 REST 客户端 + 注册表视图 + 最小配置。"""
+
+    def __init__(self) -> None:
+        self.client = FakeRestClient()
+        self.view = build_view(ENTITIES, DEVICES, AREAS)
+        self.config = {"events": {"exclude_entities": ["sensor.simuhome_virtual_time"]}}
 
 
 def test_contract_shape() -> None:
@@ -100,12 +119,11 @@ def test_call_tool_envelope() -> None:
 
 
 def test_stubs_are_not_implemented() -> None:
-    """M1 只做实 observe_home，其余七个工具必须返回 NOT_IMPLEMENTED。"""
+    """M2 之后仍未实现的四个工具必须返回 NOT_IMPLEMENTED。"""
 
     from home_mcp.backend_ha.tools import MODULES
 
-    pending = ("inspect_room", "inspect_device", "execute_action",
-               "time_control", "check_goal", "query_events", "memory")
+    pending = ("execute_action", "time_control", "check_goal", "memory")
     for name in pending:
         try:
             MODULES[name].run(None, {})
@@ -138,20 +156,100 @@ def test_mapping_rules() -> None:
 def test_observe_home_on_fixture() -> None:
     """observe_home 在夹具上应给出 3 个房间、4 项环境量与虚拟时间。"""
 
-    class Context:
-        """最小上下文：假 REST 客户端 + 注册表视图。"""
-
-        def __init__(self) -> None:
-            self.client = FakeRestClient()
-            self.view = build_view(ENTITIES, DEVICES, AREAS)
-
-    data = observe_home.run(Context(), {})
+    data = observe_home.run(FixtureContext(), {})
     assert len(data["rooms"]) == 3
     living = data["rooms"]["living_room"]
     assert living["env"] == {"temperature": 26, "humidity": 45, "illuminance": 800, "pm10": 25}
     assert living["devices"] == ["living_room_ac", "living_room_tv"]
     assert data["time"] == "2025-08-24 08:30:34"
     assert data["counts"]["metrics"] == ["humidity", "illuminance", "pm10", "temperature"]
+
+
+def test_inspect_room_on_fixture() -> None:
+    """inspect_room 给环境量 + 设备清单 + doors=null；房间不存在报 UNKNOWN_ROOM。"""
+
+    context = FixtureContext()
+    data = inspect_room.run(context, {"room_id": "living_room"})
+    assert data["env"] == {"temperature": 26, "humidity": 45, "illuminance": 800, "pm10": 25}
+    assert data["devices"] == ["living_room_ac", "living_room_tv"]
+    assert data["doors"] is None
+
+    try:
+        inspect_room.run(context, {"room_id": "garage"})
+    except HomeMcpError as err:
+        assert err.code is ErrorCode.UNKNOWN_ROOM
+    else:
+        raise AssertionError("不存在的房间应当报 UNKNOWN_ROOM")
+
+    try:
+        inspect_room.run(context, {})
+    except HomeMcpError as err:
+        assert err.code is ErrorCode.BAD_REQUEST
+    else:
+        raise AssertionError("缺 room_id 应当报 BAD_REQUEST")
+
+
+def test_inspect_device_on_fixture() -> None:
+    """inspect_device 给状态与动作；空调的温度范围取设备自报值。"""
+
+    context = FixtureContext()
+
+    ac = inspect_device.run(context, {"device_id": "living_room_ac"})
+    assert ac["kind"] == "climate" and ac["area_id"] == "living_room"
+    assert ac["state"]["mode"] == "off" and ac["state"]["current_temperature"] == 26.0
+    actions = {item["action"]: item for item in ac["actions"]}
+    assert set(actions) == {"set_mode", "set_temperature"}
+    temp_param = actions["set_temperature"]["params"]["value"]
+    assert (temp_param["minimum"], temp_param["maximum"], temp_param["step"]) == (7.0, 32.0, 0.5)
+    assert actions["set_mode"]["params"]["mode"]["enum"] == ["off", "cool", "heat"]
+
+    tv = inspect_device.run(context, {"device_id": "living_room_tv"})
+    assert {item["action"] for item in tv["actions"]} == {"turn_on", "turn_off", "toggle"}
+    assert tv["state"]["on"] is False
+
+    fan = inspect_device.run(context, {"device_id": "kitchen_fan"})
+    fan_actions = {item["action"]: item for item in fan["actions"]}
+    assert set(fan_actions) == {"turn_on", "turn_off", "set_percentage"}
+    assert fan_actions["set_percentage"]["params"]["value"]["maximum"] == 100
+
+    try:
+        inspect_device.run(context, {"device_id": "no_such_device"})
+    except HomeMcpError as err:
+        assert err.code is ErrorCode.UNKNOWN_DEVICE
+    else:
+        raise AssertionError("不存在的设备应当报 UNKNOWN_DEVICE")
+
+
+def test_query_events_on_fixture() -> None:
+    """默认只看本家庭并排除虚拟时间；显式指定实体时两层过滤都关；参数校验生效。"""
+
+    context = FixtureContext()
+    since = "2026-09-17T21:00:00+00:00"
+
+    default = query_events.run(context, {"since": since})
+    assert len(default["events"]) == 2, default
+    assert all("virtual_time" not in (item["entity_id"] or "") for item in default["events"])
+    assert default["counts"]["excluded_entities"] == ["sensor.simuhome_virtual_time"]
+    assert default["counts"]["scoped_to_home"] is True
+    assert all(item["entity_id"] != "update.hacs_update" for item in default["events"])
+
+    explicit = query_events.run(context, {"since": since, "entity_id": "sensor.simuhome_virtual_time"})
+    assert len(explicit["events"]) == 1
+    assert explicit["counts"]["excluded_entities"] == [] and explicit["counts"]["scoped_to_home"] is False
+
+    foreign = query_events.run(context, {"since": since, "entity_id": "update.hacs_update"})
+    assert len(foreign["events"]) == 1, foreign
+
+    limited = query_events.run(context, {"since": since, "limit": 1})
+    assert len(limited["events"]) == 1
+
+    for bad in ({"since": "昨天"}, {"since": since, "until": "2020-01-01T00:00:00+00:00"}, {"limit": 9999}):
+        try:
+            query_events.run(context, bad)
+        except HomeMcpError as err:
+            assert err.code is ErrorCode.BAD_REQUEST, bad
+        else:
+            raise AssertionError(f"参数 {bad} 应当报 BAD_REQUEST")
 
 
 def test_conditions_and_config() -> None:
@@ -187,6 +285,9 @@ def main() -> int:
         test_stubs_are_not_implemented,
         test_mapping_rules,
         test_observe_home_on_fixture,
+        test_inspect_room_on_fixture,
+        test_inspect_device_on_fixture,
+        test_query_events_on_fixture,
         test_conditions_and_config,
     ]
     failed = 0

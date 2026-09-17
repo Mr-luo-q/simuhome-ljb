@@ -1,24 +1,35 @@
 # ha_mcp_server 长期计划
 
-## 0.1 进度（2026-09-17）
+## 0.1 进度（2026-09-18）
 
 ```text
-已完成  M1  骨架 + observe_home
-        交付：entry / server / errors / runtime（配置部分）/ contract 四件 /
-              backend_ha（client + mapping + tools 八个文件）/ tests 三件
-        验收：tools/list 8 个工具；observe_home 在真 HA 上返回 3 房间 4 环境量 + 虚拟时间；
-              其余 7 个返回 NOT_IMPLEMENTED；契约测试 7/7 通过；端到端 4/4 通过；
-              协议壳词汇检查无命中
-        文件：src 22 个 .py（全部配同名 .md），tests 4 个 .py（契约测试 + 夹具 + 端到端）；
-              设计里的 tests 共 7 个，其余 3 个单测（conditions / clock / runtime）随 M2、M4 补
-        文档：11_最终设计_接入层与统一语义MCP.md §7.1（本轮以此为准）
-待办    M2 只读三件套 → M3 写与判定 → M4 时间与记忆 → M5 验收
-已验证  大模型端到端调用：DeepSeek deepseek-flash（thinking=disabled）跑 tests\test_llm_smoke.py
-        两轮 8/8 通过；模型第 1 轮命中 observe_home 并中文汇总，第 2 轮先查再动、
-        面对 NOT_IMPLEMENTED 如实说明而不是谎报成功
-已修    contracts 里 array 参数缺 items、object 参数缺 properties —— 主流 function calling
-        实现会因此拒收工具定义，已补齐并由契约测试守住
-        错误 hint 里的内部文档编号（"11 号文档""M2~M4"）会被模型转述给用户，已改成用户能懂的说法
+已完成  M1  骨架 + observe_home（2026-09-17）
+            交付 entry / server / errors / runtime（配置部分）/ contract 四件 /
+                 backend_ha（client + mapping + tools 八个文件）/ tests 三件
+            验收 tools/list 8 个工具；observe_home 在真 HA 上 3 房间 4 环境量 + 虚拟时间；
+                 其余 7 个返回 NOT_IMPLEMENTED；契约 7/7；端到端 4/4；协议壳词汇检查无命中
+
+已完成  M2  只读三件套：inspect_room、inspect_device、query_events（2026-09-18）
+            交付 契约新增规范动作表 ACTIONS_BY_KIND（含参数范围）；mapping 增加
+                 collect_env / summarize_state / to_number；client 增加 get_state 与 get_logbook；
+                 三个工具实现 + 夹具扩充（logbook / 外部集成事件）+ 契约用例
+            验收 契约 10/10；真机端到端 11/11；大模型冒烟 8/8
+            口径 query_events 加两层默认过滤（只看本家庭、排除虚拟时间），显式实体时全关；
+                 "非空"验收从近 10 分钟改为近 8 小时（安静时段本来就没有事件）
+
+待办    M3 写与判定 → M4 时间与记忆 → M5 验收
+文件    src 22 个 .py + tests 6 个 .py，全部配同名 .md；
+        设计里的 test_unit_conditions / clock / runtime 三个单测随 M3、M4 补
+文档    11_最终设计_接入层与统一语义MCP.md（§7.1、§7.2 记为已完成）
+
+跨期结论
+  大模型端到端     DeepSeek deepseek-flash（thinking=disabled）跑 tests\test_llm_smoke.py 8/8；
+                  M1 时它盲试三个未实现工具，M2 之后改走 inspect_room → inspect_device →
+                  execute_action 的"先查再动"路径
+  schema 兼容性    array 参数必须带 items、object 必须带 properties，否则主流 function calling
+                  实现会拒收工具定义（已修，并由契约测试守住）
+  错误文案          hint 会被模型原文转述给用户：不写内部文档编号与里程碑代号，
+                   也不列"当前可用工具"（会随分期过时），指向 tools/list
 ```
 
 ## 0. 项目定位

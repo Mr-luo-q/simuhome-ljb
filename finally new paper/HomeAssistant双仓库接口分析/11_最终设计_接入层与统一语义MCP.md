@@ -136,8 +136,9 @@ D:\D_coderesource\simuhome\                    工作区根目录（★ = git �
 │  ├─ tests\
 │  │  ├─ __init__.py / fake_ha.py              假 HA，供契约测试
 │  │  ├─ test_contract_tools.py                8 个工具跑同一套契约用例
-│  │  ├─ test_unit_conditions.py / test_unit_clock.py / test_unit_runtime.py
-│  │  └─ test_e2e_real_ha.py                   连真实 HA 的端到端脚本（手动跑）
+│  │  ├─ test_e2e_real_ha.py                   连真实 HA 的端到端脚本（手动跑）
+│  │  ├─ test_llm_smoke.py                     DeepSeek 直连服务，验模型选工具与诚实性
+│  │  └─ test_unit_conditions.py / test_unit_clock.py / test_unit_runtime.py  待补（随 M3/M4）
 │  └─ data\home_mcp.sqlite3                    运行时生成：memory / schedules / calls 三张表
 │
 ├─★ _tools\
@@ -304,12 +305,12 @@ name / params / returns / errors / time_semantics
 | 工具 | 参数 | 返回 | 关键实现点 | maps_to（论文口径） |
 | --- | --- | --- | --- | --- |
 | `observe_home` | 无 | 房间清单 + 每房间环境量 + 虚拟时间 | area 注册表 + 按 area 过滤（44 → 25） | `observe_home` |
-| `inspect_room` | `room_id` | 环境量 + 设备清单 + `doors: null` | `extract_from_target`，entity→device→area | `inspect_room` |
-| `inspect_device` | `device_id` | 状态 + 可用动作与参数范围 | 服务名白名单 + REST 服务 schema | `inspect_device` |
+| `inspect_room` | `room_id` | 环境量 + 设备清单 + `doors: null` | 房间→设备与传感器的映射来自注册表视图；环境量聚合与 observe_home 共用 | `inspect_room` |
+| `inspect_device` | `device_id` | 状态 + 可用动作与参数范围 | 动作表来自契约；范围取设备自报值（空调 7~32/0.5、风扇 0~100/1） | `inspect_device` |
 | `execute_action` | `device_id`、`action`、参数 | 执行结果与回执 | 规范动作 → 服务调用；执行前查可用性；回读 500 ms × 3 | `execute_device_action` |
 | `time_control` | `op`（advance / schedule / list / cancel）、参数 | 快照或预约 id | advance 真等（超时 30 s）；schedule 走 runtime 调度器 | `wait_for_event` + 预约类 |
 | `check_goal` | 条件列表 | 每条是否满足 | 目标命名空间 `<room>.<metric>` / `<device_id>.<attr>` | `check_goal_state` |
-| `query_events` | 时间窗、可选实体 | 事件序列 | logbook，默认排除虚拟时间传感器 | `query_events` |
+| `query_events` | 时间窗、可选实体 | 事件序列 | logbook + 两层默认过滤（只看本家庭、排除虚拟时间），显式实体时全关 | `query_events` |
 | `memory` | `op`（read / write）、`key`、可选 `value` | 记忆内容 | sqlite memory 表 | `memory_read` / `memory_write` |
 
 统一返回外壳：`{"ok": bool, "data": {...}, "error": {"code","message","hint"}, "meta": {"elapsed_ms","clock"}}`。
@@ -465,14 +466,37 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 
 ### 7.2 M2 只读三件套（约 1 天）
 
+状态：已完成（2026-09-18）。实测结果见本节末尾。
+
 ```text
 内容   inspect_room、inspect_device、query_events
 验收   inspect_room(living_room) → 5 台设备 + 4 项环境量 + doors=null
        inspect_device(living_room_ac) → 模式 off/cool/heat、设定点范围 7~32、当前温度 26.0
        inspect_device(living_room_side_light) → 状态 + 动作清单（turn_on/turn_off/toggle）
-       query_events(最近 10 分钟) → 非空，且不含 sensor.simuhome_virtual_time
+       query_events(近 8 小时) → 非空，且不含 sensor.simuhome_virtual_time
+       （原稿写"最近 10 分钟"，实测安静时段 508 条全是虚拟时间、排除后为 0，故改为 8 小时窗口）
        三个工具对假 HA 与真 HA 各跑一遍，返回结构一致
 交付   假 HA 夹具 + 契约测试用例
+```
+
+```text
+实测（真 HA）   inspect_room(living_room) = 5 台设备 + 4 环境量 + doors=null；
+               inspect_room(garage) → UNKNOWN_ROOM；
+               inspect_device(living_room_ac) = 动作 set_mode/set_temperature，
+                 温度 minimum 7.0 / maximum 32.0 / step 0.5（取设备自报值）；
+               inspect_device(living_room_side_light) = turn_on/turn_off/toggle；
+               inspect_device(ghost) → UNKNOWN_DEVICE；
+               query_events(近 8 小时) = 239 条匹配、返回 50 条，无虚拟时间、实体全在本家庭前缀内；
+               query_events(显式指定虚拟时间) = 5 条，显式请求不被过滤
+测试            契约测试 10/10；真机端到端 11/11；大模型冒烟 8/8
+沿路改的口径     ① query_events 增加"只看本家庭实体"过滤：实测 logbook 里混有 HACS 更新、
+                 太阳、天气等别的集成事件，与 observe_home 按 area 过滤的口径不一致
+               ② "最近 10 分钟非空"这条验收改成"近 8 小时非空"：实测安静时段近 10 分钟
+                 508 条全是虚拟时间、排除后为 0 条，空结果属正常而非故障
+               ③ NOT_IMPLEMENTED 的 hint 改为"可用工具以 tools/list 为准"，
+                 避免每完成一期就要改一次提示文案
+模型侧表现       大模型第 2 轮改走 inspect_room → inspect_device → execute_action，
+               即"先查再动"：M2 落地后模型有了正常观察路径，不再盲试三个未实现工具
 ```
 
 ### 7.3 M3 写与判定（约 1 天）
@@ -672,7 +696,7 @@ M5 要填的验收表：
 | time_control(advance) | 等 5 秒内状态变化 | 返回快照，超时 30 s 记 VERIFY_TIMEOUT | | |
 | time_control(schedule) | 10 秒后关灯 | 到点执行成功 | | |
 | check_goal | kitchen.temperature lt 24 | pass=false | | |
-| query_events | 最近 10 分钟 | 非空且不含虚拟时间传感器 | | |
+| query_events | 近 8 小时 | 非空、不含虚拟时间、实体都在本家庭前缀内 | | |
 | memory | 写后读 | 内容一致 | | |
 
 环境侧的自检（改过接入层后跑）：
