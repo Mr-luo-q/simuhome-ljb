@@ -50,4 +50,6 @@ Python   C:\ProgramData\anaconda3\python.exe（已装 mcp 1.26.0 / websockets 15
 令牌     HA_TOKEN 环境变量（或 ..\_secrets\ha_token.txt）；MCP_TOKEN 随意设一个
 配置     config.example.yaml 复制成 config.yaml（不入库）
 运行时   SimuHome :8000、Mosquitto :1883、HA :8123 三层都要在跑
+拉起     ..\_tools\start_simuhome_stack.ps1 一键起全套（含把 home_full.json 装回 SimuHome，
+         否则设备接口全 404、HA 实体虽在线但写命令落空）
 ```

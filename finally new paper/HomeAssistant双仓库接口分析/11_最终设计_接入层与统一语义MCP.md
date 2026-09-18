@@ -570,6 +570,9 @@ advance 耗时    虚拟时钟 1:1，HA 侧 advance 就是真等；长时序任�
 命名不稳定      用户可改实体名；entity_id 靠改名脚本强制，配置只作覆盖
 单实例假设      一个 HA、一个令牌、一个 sqlite；并发实验要各起一份
 动态依赖        entry 到后端是字符串表 + importlib，工具链看不到这条边
+冷启动缺 home   SimuHome 重启后 home 是空的：设备接口全 404，HA 实体却仍在线，
+                写命令会被接受但落空（回执 verified=false，不是 DEVICE_UNAVAILABLE）。
+                拉起顺序与自检见 _tools\start_simuhome_stack.ps1（第 3 步载入 home_full.json）
 未验证          长时间运行（内存 / 日志 / 死锁）。M5-1 与 M5-2 已于 2026-09-18 验证：
                 reset 重建后 25 实体 / 16 条设备注册无重复、rename dry-run 为 0；
                 broker 重启后发布器自动重连、实体恢复（tests\test_degraded_backend.py 21/21）
