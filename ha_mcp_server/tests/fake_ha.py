@@ -95,10 +95,13 @@ class FakeRestClient:
         self,
         states: list[dict[str, Any]] | None = None,
         logbook: list[dict[str, Any]] | None = None,
+        swallow_writes: bool = False,
     ) -> None:
         source = states if states is not None else STATES
         self._states = [dict(item) for item in source]            # 可变副本，写路径要改它
         self._logbook = logbook if logbook is not None else LOGBOOK
+        self.swallow_writes = swallow_writes                      # True = 收下命令但不改状态
+        self.calls: list[dict[str, Any]] = []                     # 记录收到过哪些服务调用
 
     def get_states(self) -> list[dict[str, Any]]:
         """返回夹具里的状态列表。"""
@@ -142,6 +145,13 @@ class FakeRestClient:
         item = self._find(target)
         if item is None:
             raise HomeMcpError(ErrorCode.SERVICE_ERROR, f"假 HA 没有实体 {target}")
+
+        self.calls.append(
+            {"domain": domain, "service": service, "data": payload, "entity_id": target}
+        )
+        if self.swallow_writes:
+            # 收下命令但不改状态：模拟"HA 接受写入、设备侧没生效"，用来测 verified=false 分支
+            return [{"entity_id": target}]
 
         attributes = item.setdefault("attributes", {})
         if service == "turn_on":

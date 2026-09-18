@@ -35,6 +35,14 @@ summarize_state 掉线时字段给 null：原来把 unavailable 说成 on=false�
 模型会把"发布器掉线"读成"灯是关的"；真机降级实测发现后改成六字段全 None
 ```
 
+## verified=false 分支覆盖（已完成，留作记录）
+
+```text
+假 HA 加 swallow_writes：收下服务调用但不改状态（模拟"HA 接受写入、设备侧没生效"）。
+契约测试断言 verified=false、verify_note 带上期望与超时、steps 里有服务调用、
+调用本身不算失败——这条分支以前只有代码没有测试（2026-09-18 冷启动真机踩到过）
+```
+
 ## M4 的前置
 
 ```text

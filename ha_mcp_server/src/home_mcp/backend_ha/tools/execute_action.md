@@ -38,5 +38,6 @@ set_percentage                →  fan.set_percentage（参数 value → percent
 节奏     verify_delay_ms（默认 500）× verify_attempts（默认 3）
 结果     verified=true/false；false 时附 verify_note，但不算调用失败
          （HA 服务调用是异步的，状态可能稍后才变）
+        这条分支由契约测试覆盖：假 HA 开 swallow_writes，收下命令但不改状态
 steps    结构化记录：[{target, service, data}]
 ```

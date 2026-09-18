@@ -244,6 +244,18 @@ def test_inspect_device_on_fixture() -> None:
     assert offline_fan["state"] == {"on": None, "level": None}, offline_fan["state"]
     assert len(offline_tv["actions"]) == 3, "动作清单看能力，不随可用性变化"
 
+    # 写入被吞：HA 收下命令但状态始终不变 → verified=false + verify_note，调用本身不算失败
+    swallowed_context = FixtureContext()
+    swallowed_context.client = FakeRestClient(swallow_writes=True)
+    swallowed = execute_action.run(
+        swallowed_context, {"device_id": "living_room_tv", "action": "turn_on"}
+    )
+    assert swallowed["verified"] is False, swallowed
+    assert "未在" in swallowed.get("verify_note", ""), swallowed
+    assert swallowed["state_after"]["on"] is False, "状态确实没变"
+    assert swallowed["steps"][0]["service"] == "switch.turn_on", "命令确实发出去了"
+    assert len(swallowed_context.client.calls) == 1, "假 HA 收到了这次调用"
+
 
 def test_query_events_on_fixture() -> None:
     """默认只看本家庭并排除虚拟时间；显式指定实体时两层过滤都关；参数校验生效。"""

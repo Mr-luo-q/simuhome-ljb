@@ -28,7 +28,8 @@ inspect_device  三种 kind 的状态摘要与动作表；空调温度范围取�
                 实体掉线时六字段全 None（不把 unavailable 说成 on=false），动作清单不变
 query_events    默认排除虚拟时间；显式指定实体时不排除；limit 与时间校验生效
 execute_action  四道闸门（设备存在 / 可用 / 动作支持 / 参数范围）+ 三类设备的写路径；
-                假 HA 可回读，越界与不支持动作都被本地拦下
+                假 HA 可回读，越界与不支持动作都被本地拦下；
+                写入被吞（swallow_writes）时 verified=false + verify_note，调用仍算成功
 check_goal      conditions + keep 两组判定；目标解析不了 → BAD_TARGET；结构错 → BAD_REQUEST
 未实现工具       time_control / memory 仍返回 NOT_IMPLEMENTED
 条件与配置      条件求值；${VAR} 替换成功与变量缺失报错
