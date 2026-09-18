@@ -1,7 +1,9 @@
 # `memory.py` 说明
 
 ```text
-状态   M4 实现，当前返回 NOT_IMPLEMENTED
+状态   当前返回 NOT_IMPLEMENTED；2026-09-18 晚定稿的新计划是删掉本工具，
+      记忆改走注入（data\memory.yaml → initialize.instructions 与 observe_home），
+      本文件与 memory.py 在 M4 一起删除。详见 13 号文档第 3 节。
 职责   按 key 读写长期记忆
 输入   {op: read|write, key, value?}
 输出   memory{key, value, updated_at}

@@ -2,7 +2,8 @@
 
 ## 功能
 
-基础设施模块。M1 只实现配置部分；sqlite（memory / schedules / calls 三张表）与调度器在 M4 补。
+基础设施模块。M1 只实现配置部分；M4 补 sqlite（schedules / calls 两张表）与调度器，
+外加读记忆文件（data\memory.yaml，注入给模型用，只读不写）。
 
 ```text
 输入   config.yaml 路径

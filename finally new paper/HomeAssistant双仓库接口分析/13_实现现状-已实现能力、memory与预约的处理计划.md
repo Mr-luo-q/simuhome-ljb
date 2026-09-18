@@ -8,8 +8,9 @@
 
 ```text
 已实现   8 个工具里的 6 个（观察 3 个 + 控制 1 个 + 判定 1 个 + 事件 1 个），全部在真 HA 上跑通
-未实现   time_control（含预约）与 memory 两个空实现，runtime 的 sqlite 与调度器也没写
+未实现   time_control（含预约）是空实现，runtime 的 sqlite 与调度器也没写
 可验收   契约 12/12、真机端到端 21/21、大模型冒烟 9/9、降级与恢复 21/21
+记忆     2026-09-18 晚定稿：照 SMH 的做法走注入，删掉 memory 工具（8 个工具收成 7 个）
 下一步   先补三处规格（cancel 的 schedule_id、advance 上限口径、time 配置段），再按 M4a/M4b/M4c 开工
 ```
 
@@ -48,7 +49,7 @@ M3（2026-09-18）  execute_action：四道闸门 + 回读；check_goal：condit
 | `check_goal` | `conditions`、`?keep` | goals[...] + keep[...] + all_pass | 已实现 |
 | `query_events` | `?since`、`?until`、`?entity_id`、`?limit` | events[{ts, entity_id, state, name}] | 已实现（扩展项） |
 | `time_control` | `op`、`?seconds`、`?at`、`?steps` | snapshot{} 或 {schedule_id} | 未实现（NOT_IMPLEMENTED） |
-| `memory` | `op`、`key`、`?value` | memory{key, value, updated_at} | 未实现（NOT_IMPLEMENTED） |
+| `memory` | `op`、`key`、`?value` | memory{key, value, updated_at} | 未实现；新计划里整体删掉，改注入（见 3.2） |
 
 两点要注意：一是模型在 `tools/list` 里只看得到 `summary` + 参数的 JSON Schema，
 契约里的 `returns` 字段不进模型视野（它是对内文档）；二是 `execute_action` 实际返回
@@ -100,22 +101,22 @@ SERVICE_ERROR / VERIFY_TIMEOUT / INVALID_TIME / UNKNOWN_KEY / BAD_TARGET / BAD_R
           该目录已在 .gitignore 里（/ha_mcp_server/data/）
 ```
 
-它不是"维护一个文档"：模型通过 `memory(write)` 写键值、用 `memory(read)` 读回来。
-把记忆写进一个 Markdown 文档、再整篇塞进上下文，是 SMH-Bench 的做法
-（`{{memory_list}}` 上下文注入），12 号文档把它记为扩展项，不进论文主张。我们做的是工具化：
-模型自己决定记什么、什么时候读。
+原设计是工具化：模型通过 `memory(write)` 写键值、用 `memory(read)` 读回来，存在 sqlite。
+SMH-Bench 走的是另一条路——把记忆整段拼进提示词（`{{memory_list}}` 上下文注入），
+12 号文档把它记为扩展项、不进论文主张。2026-09-18 晚定稿：我们改用 SMH 那条路（原因见 3.3、3.4）。
 
 ### 3.2 计划
 
 ```text
-实现（M4a）  runtime 建 sqlite（三张表一起建：memory / schedules / calls）
-             memory 只做两个 op：write 覆盖写并刷新 updated_at；read 命中返回值，未命中抛 UNKNOWN_KEY
-             值按字符串存（契约就是 string）；expires_at 列先留着不用
-验收         write → read 内容一致；read 不存在的 key → UNKNOWN_KEY；
-             同一个 key 二次 write 覆盖成功；db 文件在配置目录下生成
-不负责       不做画像推理、不做遗忘 / 过期清理（二期）；不做跨实例共享（一个 server 进程一个库）
-论文口径     扩展项：两篇基准都没有记忆工具，所以它是"补齐 8 格里记忆这一格"，
-             不写进三支柱的主张；要收紧范围就整体推迟到二期，写成 scoping
+做法（M4）   实验方把记忆写成 data\memory.yaml；服务端启动时读一次，之后只读不写
+注入点一     MCP initialize 的 instructions 字段：客户端会把它放进模型上下文，
+            等价于 SMH 把 {{memory_list}} 拼进提示词（SDK 支持 Server(..., instructions=...)）
+注入点二     observe_home 返回里的 memory 字段：客户端不展示 instructions 时的兜底
+契约改动     删掉 memory 的 ToolSpec 与 memory.py / memory.md；错误码 UNKNOWN_KEY 一起删
+验收         改记忆文件并重启后，initialize.instructions 与 observe_home 的 memory 字段内容一致；
+             文件缺失时不报错（按空记忆处理）
+不做的       记忆读写工具、sqlite memory 表、遗忘策略、语义检索、跨实例共享
+论文口径     扩展项：记忆由实验方给 → 只能测"会不会用"，测不到"会不会记"，如实写进 scoping
 ```
 
 ### 3.3 与 SMH-Bench 的记忆方案对比
@@ -147,20 +148,22 @@ SMH-Bench：记忆是"题目给、模型用"
 
 ```text
 SMH 式的优势   把"会不会用记忆"做成可判定任务：确定、可复现、判分简单
-我们式的优势   贴近真实部署，且两个后端都能用同一份实现；能顺带观察"记"这一环
-我们式的代价   评测方差大：模型忘了查就等于任务失败，会把"记忆能力"和"检索自觉性"混在一起
+工具式的优势   贴近真实部署，且两个后端都能用同一份实现；能顺带观察"记"这一环
+工具式的代价   评测方差大：模型忘了查就等于任务失败，会把"记忆能力"和"检索自觉性"混在一起
 SMH 式的代价   记忆由评测方准备，测不到"记"；每轮注入会稀释注意力，记忆一多就是噪声
                （SMH 自己的错误分类里就盯"过度使用工具、低效交互"这类问题）
 ```
 
-本轮怎么落，建议三条：
+2026-09-18 晚定稿：采用 SMH 式注入。理由是判据落在端侧小模型上（见 3.4）——
+注入让模型零决策，工具式每加一个工具就多一次"要不要用、参数怎么填"的机会成本。
+后续怎么落：
 
 ```text
-1 保留 memory 工具（成本低，只是把 8 格里的"记忆"填上），论文里不宣称个性化能力
-2 以后真要做"个性化 / 记忆"任务族，走混合方案：
-  任务必需的记忆由评测方注入（对齐 SMH 的判分方式），agent 自己攒的记忆走工具；
-  报告分两栏——给定记忆的使用率、自主记忆的保持率，两者不要混成一个指标
-3 scoping 写清：不做遗忘策略、不做语义检索、不做跨用户隔离
+1 删掉 memory 工具与其契约（UNKNOWN_KEY 一并删），工具面 8 → 7；记忆写成 data\memory.yaml
+2 注入两处：initialize.instructions（主）+ observe_home 返回（兜底）
+3 以后真要做"模型自己攒记忆"，再单开 write 工具，报告分两栏：给定记忆的使用率、
+  自主记忆的保持率，两者不要混成一个指标
+4 scoping 写清：不做遗忘策略、不做语义检索、不做跨用户隔离
   （语义检索是 PersonalHomeBench 的路线：它有"获取_家庭_记忆 / 获取_家庭成员_记忆"
    这类自然语言查询工具，比我们的键值取法重一档）
 ```
@@ -195,30 +198,30 @@ SMH-Bench 自己的数据可以先当先验（它有 4B 级模型的结果）：
 按"小模型友好度"排的三条口径：
 
 ```text
-A 注入式（SMH 原样）   记忆整段进上下文：模型零决策，但吃上下文窗口、对噪声敏感
-B 混合（建议先试）     读：服务端在会话开始时把记忆注入；写：留 memory(write) 给模型
-                      小模型不用学"怎么查"，仍然保留"自己攒记忆"的能力
-C 全工具（当前设计）   read 与 write 都靠模型自己调：最贴近真实部署，学习成本最高
+A 注入式（SMH 原样，采用）  记忆整段进上下文：模型零决策，但吃上下文窗口、对噪声敏感
+B 混合                    读注入 + 留 write 工具：小模型不用学"怎么查"，仍能自己攒
+C 全工具（原设计）         read 与 write 都靠模型自己调：最贴近部署，学习成本最高
 ```
 
-验证方案（不靠嘴，一天内能出数）：
+当前决定：先按 A 落地（零决策、最快能跑、和 SMH 判分口径一致）。下面这套验证方案先留档，
+等要评估"小模型适配"或要加回写入能力时再跑——它本身就是支柱 2 训练实验的前置。
 
 ```text
 硬件      本机 31.5 GB 内存 + RTX 5060 8 GB 显存：4B 4-bit 没问题，8B 4-bit 勉强
 模型梯度  Qwen3-4B（本地）+ 一个 8~9B + 一个强模型作上限
 任务      同一批：原子动作 / 先查再动（2~3 步）/ 记忆类（TC6 型：给定偏好 + 跨会话）
-三条臂    A 注入 / B 混合 / C 全工具（其余完全一致：同一套 8 工具契约、同一批任务）
+三条臂    A 注入 / B 混合 / C 全工具（其余完全一致：同一套工具契约、同一批任务）
 指标      ① 任务成功率 ② 工具调用步数 ③ 非法调用率 ④ 该调未调率 ⑤ 跨会话记忆一致性
 学习成本  再用 N 条轨迹做小规模 SFT（正好接支柱 2），看"到 X% 成功率要多少条轨迹"
-判据      C 臂上 4B 明显差于 B、且训练要明显更多轨迹 → 把 read 砍成注入、只留 write
+判据      C 臂上 4B 明显差于 B、且训练要明显更多轨迹 → 维持 A（或退成 B）
 ```
 
-对 M4 排期的影响：
+对 M4 的影响：
 
 ```text
-M4a  sqlite + calls（M5 无论如何都要）
-M4b  time_control（支柱 3 的语义完整性需要它，且不受这个实验影响）
-memory 的形状（A / B / C）等小模型数据出来再定；在那之前不要先按 C 写死
+记忆部分：删 memory 工具 + 契约，加 data\memory.yaml 读取与两处注入（半天里的一部分）
+时间部分：time_control 与预约机制不受影响，按第 4 节原计划走
+不新增：sqlite 的 memory 表（schedules / calls 两张表仍然要）
 ```
 
 ## 4. 预约机制怎么处理、计划怎么处理
@@ -276,7 +279,7 @@ cancel(schedule_id) pending → cancelled；已完成/已取消失败 → BAD_RE
 工时拆分（比 11 号写的"约 1 天"多一点）：
 
 ```text
-M4a  sqlite + calls + memory（不涉及后台循环）                        0.5 天
+M4a  sqlite + calls + 记忆注入（删 memory 工具，改成读文件 + 两处注入）   0.5 天
 M4b  advance（上限 + progress 通知）→ schedule / list / cancel（调度器 + 重启装载）   1 天
 M4c  三个单测（conditions / clock / runtime）+ M4 验收                 0.5 天
 ```
@@ -293,12 +296,14 @@ M4c  三个单测（conditions / clock / runtime）+ M4 验收                 0
 5  11 号 §3.2 的 _tools 清单漏了 start_simuhome_stack.ps1 / .md
 另有一处死配置：发布器 discovery payload 里的 "object_id" 无效果（HA 的 MQTT discovery
 只在主题段认 object_id，payload 键会被 schema 丢掉），可以删
+记忆相关的改动（删 memory 工具、UNKNOWN_KEY 错误码、tools\__init__ 的 8→7）随 M4 一起做
 ```
 
 ## 6. 还没实现的总清单
 
 ```text
-M4 范围      time_control（advance / schedule / list / cancel）、memory、runtime 的 sqlite 与调度器、
+M4 范围      time_control（advance / schedule / list / cancel）、runtime 的 sqlite 与调度器、
+             记忆注入（删 memory 工具 + data\memory.yaml + instructions/observe_home 两处）、
              三个单测（conditions / clock / runtime）
 M5 范围      第 10 节验收表填满、8 动作 × 2 后端覆盖率报告、calls 表统计、探针复跑
 二期         query_topology（门磁或 edges 配置）、light / cover（亮度与窗帘位置）、
@@ -314,7 +319,8 @@ advance      advance(seconds=5) 返回快照，耗时 ≈5 s（误差 <1 s）；
 schedule     schedule(at=now+10s, steps=[关灯]) → {schedule_id}；
              list 里能看到 pending；10 秒后 list 显示 done，回读灯确为 off
 cancel       schedule 之后立刻 cancel → list 显示 cancelled，到点灯不动
-memory       write → read 一致；read 不存在的 key → UNKNOWN_KEY
+记忆注入      改 data\memory.yaml 并重启后，initialize.instructions 与 observe_home 的 memory
+             字段内容一致；文件缺失时不报错（按空记忆处理）；tools/list 变成 7 个
 calls        M5 能直接 SQL 出"每个工具调了多少次、成功率、平均耗时"
 回归         契约 12/12、真机端到端 21/21、大模型冒烟 9/9、降级与恢复 21/21 保持全绿
 ```

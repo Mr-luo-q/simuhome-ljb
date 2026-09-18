@@ -1,11 +1,14 @@
 # ha_mcp_server
 
-自建的 MCP server：对外暴露 8 个工具（观察、控制、时间、验证、记忆），先接 Home Assistant，架构上可替换后端。
+自建的 MCP server：对外暴露 7 个工具（观察、控制、时间、验证、事件）；记忆按 SMH 的做法走注入
+（不占工具位），先接 Home Assistant，架构上可替换后端。
 
 ```text
 当前状态    M1~M3 完成：8 个工具都已建出；observe_home / inspect_room / inspect_device /
            query_events / execute_action / check_goal 六个做实并在真 HA 上跑通
            （含写路径与还原验证）；time_control / memory 仍是 NOT_IMPLEMENTED
+新计划      memory 不做工具：改 data\memory.yaml + 两处注入（initialize.instructions、
+           observe_home），M4 落地时工具面从 8 件收成 7 件（见 11 号 §5.7、13 号第 3 节）
 设计文档    ..\finally new paper\HomeAssistant双仓库接口分析\11_最终设计_接入层与统一语义MCP.md
 长期计划    PLAN.md（M1~M5 的进度与分期）
 解耦验证    ..\finally new paper\HomeAssistant双仓库接口分析\_架构探针\（六项报告）
@@ -19,7 +22,7 @@ config.example.yaml     配置模板；复制成 config.yaml 后令牌用 ${HA_T
 src\home_mcp\
   entry.py / server.py / errors.py / runtime.py     协议壳与基础设施
   contract\             工具契约、条件判定、时间语义、回传通道（只依赖标准库）
-  backend_ha\           HA 后端：client（REST+WS）、mapping（注册表映射）、tools\（8 个工具）
+  backend_ha\           HA 后端：client（REST+WS）、mapping（注册表映射）、tools\（当前 8 件，M4 收成 7 件）
 tests\
   fake_ha.py            离线夹具（真实注册表节选）
   test_contract_tools.py 契约测试 12 项
@@ -40,7 +43,7 @@ $env:MCP_TOKEN = "local-dev-token"
 # 1 契约测试（离线，不需要 HA）
 C:\ProgramData\anaconda3\python.exe tests\test_contract_tools.py
 
-# 2 只装配不起服务：打印 8 个工具名
+# 2 只装配不起服务：打印工具名（当前 8 个，M4 后 7 个）
 $env:PYTHONPATH = "$PWD\src"
 C:\ProgramData\anaconda3\python.exe -m home_mcp.entry --config config.yaml --dry-run
 
