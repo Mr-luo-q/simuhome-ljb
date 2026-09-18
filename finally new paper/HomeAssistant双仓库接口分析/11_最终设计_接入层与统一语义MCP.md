@@ -4,7 +4,7 @@
 
 ```text
 一  接入层：把 SimuHome 世界投影进 Home Assistant（已上线，实测数据在本文）
-二  统一语义 MCP server：7 个工具，先接 HA 后端，将来接沙盒后端（待实现）
+二  统一语义 MCP server：8 个工具，先接 HA 后端，将来接沙盒后端（待实现）
 三  实施计划、模块规格与验收标准（M1~M5）
 ```
 
@@ -17,7 +17,7 @@
 ```text
 目标
   1  设备、房间、档位能力与可用性真实进入 HA：不是把开关换个名字，而是让世界状态可读可控
-  2  提供独立 MCP server，对外 7 个工具，覆盖观察 / 控制 / 时间 / 验证 / 事件
+  2  提供独立 MCP server，对外 8 个工具，覆盖观察 / 控制 / 时间 / 验证 / 记忆
   3  同一份工具契约将来可换到沙盒后端，训练与部署共用一套语义
 
 本版本不做
@@ -27,12 +27,12 @@
   OAuth / 多会话     初稿静态 Bearer + 单实例，多用户留到二期
   录制器 / 守护      不做回放录制与进程守护，崩溃时靠 unavailable 安全失败
   快进              沙盒侧快进能力本轮不用，时间语义见第 6 节
-  记忆工具          记忆按 SMH 的做法走注入，不做读写工具、不落库（见 5.7）
+  记忆写入          memory 只读：不给 key、不做写入、不落库（SMH 式：记忆由实验方准备，见 5.7）
 
 扩展项（超出 SimuHome 与 SMH-Bench 的语义维度，写清边界后保留）
   query_events      两篇都没有事件查询工具（SimuHome 只有 workflow 列表）
-  记忆注入          SMH 把 {{memory_list}} 拼进提示词；我们照做：实验方把记忆写成一份文件，
-                    服务端在 initialize.instructions 与 observe_home 返回里带出去
+  memory            两篇都没有记忆工具（SMH 用 {{memory_list}} 上下文注入）：我们保留一个
+                    简化版只读工具——不给 key、不做写入，返回实验方准备的整段记忆
   房间连通 / 拓扑   两篇都没有空间连通，这是我们的 T1 创新，二期再做
 ```
 
@@ -111,7 +111,7 @@ D:\D_coderesource\simuhome\                    工作区根目录（★ = git �
 │  │  ├─ runtime.py                            基础设施：配置、sqlite、调度器
 │  │  ├─ contract\                             L2  只依赖标准库
 │  │  │  ├─ __init__.py
-│  │  │  ├─ tools.py                           7 个工具的契约（唯一语义来源）
+│  │  │  ├─ tools.py                           8 个工具的契约（唯一语义来源）
 │  │  │  ├─ conditions.py                      目标条件求值
 │  │  │  ├─ clock.py                           虚拟 / 真实时间语义与格式
 │  │  │  └─ sinks.py                           ProgressSink / CancelToken / SessionScope
@@ -119,7 +119,7 @@ D:\D_coderesource\simuhome\                    工作区根目录（★ = git �
 │  │     ├─ __init__.py                        导出 {工具名: 实现}
 │  │     ├─ client.py                          REST + WebSocket 连接与订阅
 │  │     ├─ mapping.py                         device_id ↔ entity_id、区域关联、动作翻译
-│  │     └─ tools\                             8 件，一工具一文件（M4 删 memory.py，收成 7 件）
+│  │     └─ tools\                             8 个工具，一工具一文件，M1 先建骨架
 │  │        ├─ __init__.py                     收集 8 个实现，拼成 TOOLS 字典
 │  │        ├─ observe_home.py                 M1  全屋快照：area 注册表 + 环境量 + 虚拟时间
 │  │        ├─ inspect_room.py                 M2  房间：设备清单 + 环境量 + doors=null
@@ -128,10 +128,10 @@ D:\D_coderesource\simuhome\                    工作区根目录（★ = git �
 │  │        ├─ check_goal.py                   M3  判定：调 contract\conditions.py
 │  │        ├─ query_events.py                 M2  事件：logbook + 排除清单
 │  │        ├─ time_control.py                 M4  时间：advance / schedule / list / cancel
-│  │        └─ memory.py                       M4 删：记忆改走注入，不再做工具
+│  │        └─ memory.py                       M4 简化：只读返回整段记忆（不给 key、不写入）
 │  ├─ tests\
 │  │  ├─ __init__.py / fake_ha.py              假 HA，供契约测试
-│  │  ├─ test_contract_tools.py                7 个工具跑同一套契约用例（M4 落地后）
+│  │  ├─ test_contract_tools.py                8 个工具跑同一套契约用例
 │  │  ├─ test_e2e_real_ha.py                   连真实 HA 的端到端脚本（手动跑）
 │  │  ├─ test_llm_smoke.py                     DeepSeek 直连服务，验模型选工具与诚实性
 │  │  ├─ test_degraded_backend.py              停发布器 / 停 broker / 重建发现（破坏性，手动跑）
@@ -296,7 +296,7 @@ sensor    只读                                             房间温湿度 / �
   例外：entry 到后端是动态导入（importlib + BACKENDS 表），静态扫描看不到，靠表本身声明
 ```
 
-### 5.2 工具契约（7 个）
+### 5.2 工具契约（8 个）
 
 ToolSpec 是唯一语义来源，每个工具五个字段：
 
@@ -314,6 +314,7 @@ name / params / returns / errors / time_semantics
 | `time_control` | `op`（advance / schedule / list / cancel）、参数 | 快照或预约 id | advance 真等（超时 30 s）；schedule 走 runtime 调度器 | `wait_for_event` + 预约类 |
 | `check_goal` | `conditions`（必填）、`keep`（可选） | 两组条件各自的判定结果 | `conditions` 是目标条件、`keep` 是必须保持不变的条件（对齐两篇的"无关状态保持"）；目标命名空间 `<room>.<metric>` / `<device_id>.<attr>` | `check_goal_state` |
 | `query_events` | 时间窗、可选实体 | 事件序列 | logbook + 两层默认过滤（只看本家庭、排除虚拟时间），显式实体时全关 | `query_events`（扩展项） |
+| `memory` | 无 | `{text}`：整段记忆原文 | 读 `data\memory.yaml` 原样返回；只读、不给 key、不做写入（见 5.7） | `memory_read`（扩展项） |
 
 统一返回外壳：`{"ok": bool, "data": {...}, "error": {"code","message","hint"}, "meta": {"elapsed_ms","clock"}}`。
 `meta.clock` 标明这次调用消耗的是 `virtual` 还是 `real` 时间。
@@ -351,6 +352,7 @@ UNKNOWN_ROOM        查不到 room_id 对应的 area
 DEVICE_UNAVAILABLE  实体处于 unavailable / unknown（发布器掉线）
 UNSUPPORTED_ACTION  该实体不支持这个动作
 SERVICE_ERROR       HA 返回服务调用失败
+UNKNOWN_KEY         读记忆时键不存在（简化后的 memory 不再用 key，这个码先留在表里备用）
 VERIFY_TIMEOUT      调用成功但状态未按时变化（不算失败，附在返回值里）
 INVALID_TIME        预约时间在过去
 BAD_TARGET          条件里的目标无法解析
@@ -412,17 +414,17 @@ HA 状态        由 HA 持有，我们只读；不缓存成"真相"，每次按
 并发           一个实验实例 = 一个 server 进程 + 一个 sqlite 文件；session 维度留到二期
 ```
 
-### 5.7 记忆注入（对齐 SMH-Bench，不占工具位）
+### 5.7 memory 工具（简化版：只读整段记忆）
 
 ```text
-做法      实验方把记忆写成 data\memory.yaml；服务端启动时读一次，之后只读不写
-注入点一  MCP initialize 的 instructions 字段：客户端会把它放进模型上下文，
-         等价于 SMH 把 {{memory_list}} 拼进提示词（SDK 支持 Server(..., instructions=...)）
-注入点二  observe_home 的返回里带 memory 字段：客户端不展示 instructions 时也看得到
-不做      不做 memory 读写工具、不落库、不做遗忘与语义检索；
+做法      实验方把记忆写成 data\memory.yaml；服务端启动时读一次
+工具行为  memory()（无参数）→ 原样返回整段记忆文本；只读，不给 key、不做写入
+为什么    对齐 SMH-Bench 的口径（记忆是"题面给、模型用"），但保留工具外壳，
+         让模型自己决定什么时候取；小模型只需要记住"调 memory"这一个动作，
+         不用学 key 词表、也不会出现"写 bedtime 读 sleep_time"这类参数错
+不做      不落库（没有 sqlite memory 表）、不做 write、不做遗忘与语义检索；
          短期记忆（最近几轮对话）由客户端自己带，我们不重复实现
-取舍      端侧小模型少一次"要不要查记忆、用什么 key"的决策（SMH 的 4B 结果里，
-         参数名错与过度调用是主要失败模式）；代价是测不到"记"这一环 → 写进 scoping
+边界      测不到"会不会记"这一环 → 写进 scoping；UNKNOWN_KEY 这个错误码先留着不用
 ```
 
 ## 6. 时间语义
@@ -442,7 +444,7 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 
 ```text
 交付   entry / server / errors / contract 四件 / runtime(配置) / backend_ha(client + mapping + tools 八个)
-验收   tools/list = 8 个工具（M1 骨架数；M4 删 memory 后收成 7）；observe_home = 3 房间 + 4 环境量 + 虚拟时间；
+验收   tools/list = 8 个工具；observe_home = 3 房间 + 4 环境量 + 虚拟时间；
        其余 7 个 NOT_IMPLEMENTED；契约 7/7、端到端 4/4、协议壳词汇检查无命中
 模型   tests\test_llm_smoke.py（DeepSeek deepseek-flash）两轮 8/8：
        第 1 轮命中 observe_home 并给出中文汇总；第 2 轮要求开灯（当时未实现），
@@ -496,14 +498,14 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 
 ```text
 交付   time_control（advance / schedule / list / cancel）+ runtime 的 sqlite 与调度器；
-       删掉 memory 工具，记忆改走注入（data\memory.yaml → initialize.instructions 与 observe_home）
+       memory 改成简化只读版：memory() 返回 data\memory.yaml 的整段记忆（不给 key、不写入）
 验收   advance(seconds=5) 返回快照，超时 30 s 记 VERIFY_TIMEOUT（不算失败）；
-       schedule 10 秒后关灯到点执行成功；改记忆文件重启后，initialize.instructions
-       与 observe_home 的 memory 字段内容一致；契约与端到端按 7 件重算后全绿
+       schedule 10 秒后关灯到点执行成功；memory() 返回的内容与 data\memory.yaml 一致，
+       文件缺失时返回空记忆且不报错
 口径   advance 只接受秒数，不提供"等到条件成立"：C 粒度下状态只有六个字段，
        也没有 cron 与状态触发；"洗碗机洗完就关灯"这类目标写成轮询（advance + inspect）
        或绝对时间调度，接口不替模型做这件事
-记忆   走 SMH 的做法（见 5.7）：记忆由实验方准备成一份文件、服务端注入，不占工具位；
+记忆   走 SMH 的简化口径（见 5.7）：记忆由实验方准备成一份文件，工具只读整段返回；
        只测"会不会用"，测不到"会不会记"这一环 → 写进 scoping
 ```
 
@@ -532,7 +534,7 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 
 按「职责 / 输入 / 输出 / 读取 / 写入 / 不负责 / 对应文件」写，实现时逐条对照。
 
-计数与文档规则：`src\` 21 个 `.py`（M4 落地时删掉 `memory.py`）+ `tests\` 目标 9 个（当前 6 个，待补 3 个单测随 M4），
+计数与文档规则：`src\` 22 个 `.py`（已全部落地；M4 把 `memory.py` 改成只读版）+ `tests\` 目标 9 个（当前 6 个，待补 3 个单测随 M4），
 加 `pyproject.toml`、`README.md`、`config.example.yaml` 三个根文件；每个 `.py` 另配一份同名中文 `.md`
 （如 `observe_home.py` → `observe_home.md`），解释输入输出与职责，改代码必须同步改文档。
 
@@ -552,7 +554,7 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 
 跨模块约束留在本文：依赖方向见 §5.1，主题契约见 §4.2，两层命名见 §4.2 末。
 
-### 8.2 ha_mcp_server（7 个工具，一工具一文件）
+### 8.2 ha_mcp_server（8 个工具，一工具一文件）
 
 ```text
 职责      L1：entry.py / server.py / errors.py
@@ -566,8 +568,8 @@ HA 后端     无快进。实测虚拟时钟 1:1 真实时间推进，advance �
 不负责    不认识 HA 之外的平台（换后端只换 backend_ha\）、不做任务分解与自动编排
 对应文件  ha_mcp_server\src\home_mcp\（逐文件清单见 3.2，工具契约见 5.2）
 
-7 个工具文件与各自的实现阶段见 §3.2 的 `tools\` 清单（一工具一文件，每个配同名 .md）；
-M4 会删掉 memory.py（记忆改走注入）。
+8 个工具文件与各自的实现阶段见 §3.2 的 `tools\` 清单（一工具一文件，每个配同名 .md）；
+M4 会把 memory.py 改成只读版（返回整段记忆）。
 内部分工：`contract\tools.py` 定契约，`server.py` 按契约注册，`backend_ha\tools\*.py`
 只负责把契约落到 HA 的 REST / WS 调用；换沙盒后端时新增 `backend_sandbox\tools\*.py` 即可。
 ```
@@ -585,7 +587,8 @@ advance 耗时    虚拟时钟 1:1，HA 侧 advance 就是真等；长时序任�
 环境太慢       空调 1.8 °C/h、风扇 0.72 °C/h，跨房间传播任务在真实时间轴上不可达，
                 这类任务要么放沙盒快进，要么改 SimuHome 的效应参数（改参数要同步改本文 4.3）
 命名不稳定      用户可改实体名；entity_id 靠改名脚本强制，配置只作覆盖
-记忆测不全      记忆走注入（同 SMH）：能测"会不会用"，测不到"会不会记"；写进 scoping
+记忆测不全      memory 只读（同 SMH 的"记忆由题面给"）：能测"会不会用"，
+                测不到"会不会记"；写进 scoping
 单实例假设      一个 HA、一个令牌、一个 sqlite；并发实验要各起一份
 动态依赖        entry 到后端是字符串表 + importlib，工具链看不到这条边
 冷启动缺 home   SimuHome 重启后 home 是空的：设备接口全 404，HA 实体却仍在线，
@@ -618,7 +621,7 @@ M5 要填的验收表：
 | time_control(schedule) | 10 秒后关灯 | 到点执行成功 | | |
 | check_goal | conditions=[kitchen.temperature lt 24]、keep=[living_room.temperature lt 28] | 目标不成立、保持条件成立，两组各自标 pass | | |
 | query_events（扩展） | 近 8 小时 | 非空、不含虚拟时间、实体都在本家庭前缀内 | | |
-| 记忆注入（扩展） | 改 memory.yaml 后重启 | initialize.instructions 与 observe_home 内容一致 | | |
+| memory（扩展） | 调 memory() | 返回 data\memory.yaml 的整段内容；文件缺失时返回空记忆 | | |
 | 动作覆盖率报告 | 8 个动作 × 2 个后端 | HA 侧 6 个已验证、2 个标"当前无设备"；沙盒未建 | | |
 
 环境侧的自检（改过接入层后跑）：

@@ -10,7 +10,8 @@
 已实现   8 个工具里的 6 个（观察 3 个 + 控制 1 个 + 判定 1 个 + 事件 1 个），全部在真 HA 上跑通
 未实现   time_control（含预约）是空实现，runtime 的 sqlite 与调度器也没写
 可验收   契约 12/12、真机端到端 21/21、大模型冒烟 9/9、降级与恢复 21/21
-记忆     2026-09-18 晚定稿：照 SMH 的做法走注入，删掉 memory 工具（8 个工具收成 7 个）
+记忆     2026-09-18 晚定稿：memory 工具保留，但按 SMH 的口径简化成只读——
+         记忆由实验方准备成文件，memory() 原样返回整段；工具面仍是 8 个
 下一步   先补三处规格（cancel 的 schedule_id、advance 上限口径、time 配置段），再按 M4a/M4b/M4c 开工
 ```
 
@@ -49,7 +50,7 @@ M3（2026-09-18）  execute_action：四道闸门 + 回读；check_goal：condit
 | `check_goal` | `conditions`、`?keep` | goals[...] + keep[...] + all_pass | 已实现 |
 | `query_events` | `?since`、`?until`、`?entity_id`、`?limit` | events[{ts, entity_id, state, name}] | 已实现（扩展项） |
 | `time_control` | `op`、`?seconds`、`?at`、`?steps` | snapshot{} 或 {schedule_id} | 未实现（NOT_IMPLEMENTED） |
-| `memory` | `op`、`key`、`?value` | memory{key, value, updated_at} | 未实现；新计划里整体删掉，改注入（见 3.2） |
+| `memory` | 无（简化后） | `{text}`：整段记忆原文 | 未实现；新计划改成只读版（见 3.2） |
 
 两点要注意：一是模型在 `tools/list` 里只看得到 `summary` + 参数的 JSON Schema，
 契约里的 `returns` 字段不进模型视野（它是对内文档）；二是 `execute_action` 实际返回
@@ -101,21 +102,20 @@ SERVICE_ERROR / VERIFY_TIMEOUT / INVALID_TIME / UNKNOWN_KEY / BAD_TARGET / BAD_R
           该目录已在 .gitignore 里（/ha_mcp_server/data/）
 ```
 
-原设计是工具化：模型通过 `memory(write)` 写键值、用 `memory(read)` 读回来，存在 sqlite。
-SMH-Bench 走的是另一条路——把记忆整段拼进提示词（`{{memory_list}}` 上下文注入），
-12 号文档把它记为扩展项、不进论文主张。2026-09-18 晚定稿：我们改用 SMH 那条路（原因见 3.3、3.4）。
+原设计是键值工具：模型通过 `memory(write)` 写键值、用 `memory(read)` 读回来，存在 sqlite。
+SMH-Bench 走的是另一条路——记忆整段给定（`{{memory_list}}` 上下文注入），
+12 号文档把它记为扩展项、不进论文主张。2026-09-18 晚定稿：工具保留，但按 SMH 的口径简化成
+只读整段（细节见 3.2，理由见 3.3、3.4）。
 
 ### 3.2 计划
 
 ```text
-做法（M4）   实验方把记忆写成 data\memory.yaml；服务端启动时读一次，之后只读不写
-注入点一     MCP initialize 的 instructions 字段：客户端会把它放进模型上下文，
-            等价于 SMH 把 {{memory_list}} 拼进提示词（SDK 支持 Server(..., instructions=...)）
-注入点二     observe_home 返回里的 memory 字段：客户端不展示 instructions 时的兜底
-契约改动     删掉 memory 的 ToolSpec 与 memory.py / memory.md；错误码 UNKNOWN_KEY 一起删
-验收         改记忆文件并重启后，initialize.instructions 与 observe_home 的 memory 字段内容一致；
-             文件缺失时不报错（按空记忆处理）
-不做的       记忆读写工具、sqlite memory 表、遗忘策略、语义检索、跨实例共享
+做法（M4）   实验方把记忆写成 data\memory.yaml；服务端启动时读一次
+工具行为     memory()（无参数）→ 原样返回整段记忆文本；只读，不给 key、不做写入
+契约改动     memory 的 params 清空（去掉 op / key / value），returns 改成 {text}；
+             memory.py 改成读文件返回；UNKNOWN_KEY 暂时用不到，先留在错误码表里
+验收         调 memory() 返回的内容与 data\memory.yaml 一致；文件缺失时返回空记忆且不报错
+不做的       写入、key-value、sqlite memory 表、遗忘策略、语义检索、跨实例共享
 论文口径     扩展项：记忆由实验方给 → 只能测"会不会用"，测不到"会不会记"，如实写进 scoping
 ```
 
@@ -154,14 +154,15 @@ SMH 式的代价   记忆由评测方准备，测不到"记"；每轮注入会�
                （SMH 自己的错误分类里就盯"过度使用工具、低效交互"这类问题）
 ```
 
-2026-09-18 晚定稿：采用 SMH 式注入。理由是判据落在端侧小模型上（见 3.4）——
-注入让模型零决策，工具式每加一个工具就多一次"要不要用、参数怎么填"的机会成本。
+2026-09-18 晚定稿：采用 SMH 的"记忆给定"口径，但保留工具外壳——工具不删，只是把内部
+简化成"读文件、返回整段"。理由是判据落在端侧小模型上（见 3.4）：小模型只需要记住
+"调 memory 这么一个无参数工具"，不用学 key 词表，也不会出现"写 bedtime 读 sleep_time"。
 后续怎么落：
 
 ```text
-1 删掉 memory 工具与其契约（UNKNOWN_KEY 一并删），工具面 8 → 7；记忆写成 data\memory.yaml
-2 注入两处：initialize.instructions（主）+ observe_home 返回（兜底）
-3 以后真要做"模型自己攒记忆"，再单开 write 工具，报告分两栏：给定记忆的使用率、
+1 memory 工具保留，params 清空（去掉 op / key / value），returns 改成 {text}；工具面仍是 8 个
+2 记忆写成 data\memory.yaml，服务端启动时读一次，memory() 原样返回整段
+3 以后真要做"模型自己攒记忆"，再把 write 加回来，报告分两栏：给定记忆的使用率、
   自主记忆的保持率，两者不要混成一个指标
 4 scoping 写清：不做遗忘策略、不做语义检索、不做跨用户隔离
   （语义检索是 PersonalHomeBench 的路线：它有"获取_家庭_记忆 / 获取_家庭成员_记忆"
@@ -198,12 +199,14 @@ SMH-Bench 自己的数据可以先当先验（它有 4B 级模型的结果）：
 按"小模型友好度"排的三条口径：
 
 ```text
-A 注入式（SMH 原样，采用）  记忆整段进上下文：模型零决策，但吃上下文窗口、对噪声敏感
+采用：只读工具（SMH 口径）  记忆整段给定，工具只读返回；模型零决策，但记忆要模型主动取
+A 注入式（SMH 原样）       记忆整段进上下文：更零决策，但吃上下文窗口、对噪声敏感，
+                          客户端未必支持（依赖 instructions 字段）
 B 混合                    读注入 + 留 write 工具：小模型不用学"怎么查"，仍能自己攒
 C 全工具（原设计）         read 与 write 都靠模型自己调：最贴近部署，学习成本最高
 ```
 
-当前决定：先按 A 落地（零决策、最快能跑、和 SMH 判分口径一致）。下面这套验证方案先留档，
+当前决定：工具保留、只读整段（参数最少，调用动作单一）。下面这套验证方案先留档，
 等要评估"小模型适配"或要加回写入能力时再跑——它本身就是支柱 2 训练实验的前置。
 
 ```text
@@ -219,7 +222,7 @@ C 全工具（原设计）         read 与 write 都靠模型自己调：最贴
 对 M4 的影响：
 
 ```text
-记忆部分：删 memory 工具 + 契约，加 data\memory.yaml 读取与两处注入（半天里的一部分）
+记忆部分：memory 工具改成只读版（清空 params、读 data\memory.yaml 返回整段）——半天里的一部分
 时间部分：time_control 与预约机制不受影响，按第 4 节原计划走
 不新增：sqlite 的 memory 表（schedules / calls 两张表仍然要）
 ```
@@ -279,7 +282,7 @@ cancel(schedule_id) pending → cancelled；已完成/已取消失败 → BAD_RE
 工时拆分（比 11 号写的"约 1 天"多一点）：
 
 ```text
-M4a  sqlite + calls + 记忆注入（删 memory 工具，改成读文件 + 两处注入）   0.5 天
+M4a  sqlite + calls + memory 只读化（清空参数、读 data\memory.yaml 返回整段）   0.5 天
 M4b  advance（上限 + progress 通知）→ schedule / list / cancel（调度器 + 重启装载）   1 天
 M4c  三个单测（conditions / clock / runtime）+ M4 验收                 0.5 天
 ```
@@ -296,14 +299,15 @@ M4c  三个单测（conditions / clock / runtime）+ M4 验收                 0
 5  11 号 §3.2 的 _tools 清单漏了 start_simuhome_stack.ps1 / .md
 另有一处死配置：发布器 discovery payload 里的 "object_id" 无效果（HA 的 MQTT discovery
 只在主题段认 object_id，payload 键会被 schema 丢掉），可以删
-记忆相关的改动（删 memory 工具、UNKNOWN_KEY 错误码、tools\__init__ 的 8→7）随 M4 一起做
+记忆相关的改动（memory 只读化：清空 op / key / value 参数、returns 改成 {text}、
+memory.py 改成读文件返回）随 M4 一起做；工具面仍是 8 个
 ```
 
 ## 6. 还没实现的总清单
 
 ```text
 M4 范围      time_control（advance / schedule / list / cancel）、runtime 的 sqlite 与调度器、
-             记忆注入（删 memory 工具 + data\memory.yaml + instructions/observe_home 两处）、
+             memory 简化（只读返回 data\memory.yaml 的整段，不留 key / write / 表）、
              三个单测（conditions / clock / runtime）
 M5 范围      第 10 节验收表填满、8 动作 × 2 后端覆盖率报告、calls 表统计、探针复跑
 二期         query_topology（门磁或 edges 配置）、light / cover（亮度与窗帘位置）、
@@ -319,8 +323,8 @@ advance      advance(seconds=5) 返回快照，耗时 ≈5 s（误差 <1 s）；
 schedule     schedule(at=now+10s, steps=[关灯]) → {schedule_id}；
              list 里能看到 pending；10 秒后 list 显示 done，回读灯确为 off
 cancel       schedule 之后立刻 cancel → list 显示 cancelled，到点灯不动
-记忆注入      改 data\memory.yaml 并重启后，initialize.instructions 与 observe_home 的 memory
-             字段内容一致；文件缺失时不报错（按空记忆处理）；tools/list 变成 7 个
+memory       调 memory() 返回的内容与 data\memory.yaml 一致；文件缺失时返回空记忆且不报错；
+             工具面仍是 8 个（契约里 memory 的参数为空）
 calls        M5 能直接 SQL 出"每个工具调了多少次、成功率、平均耗时"
 回归         契约 12/12、真机端到端 21/21、大模型冒烟 9/9、降级与恢复 21/21 保持全绿
 ```

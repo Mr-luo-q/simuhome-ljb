@@ -13,7 +13,7 @@ M2  已完成（2026-09-18）  inspect_room / inspect_device / query_events；
 M3  已完成（2026-09-18）  execute_action + check_goal；契约 12/12、端到端 21/21、
                           大模型冒烟 9/9（模型真开灯并自动还原）
 M4  下一步（约 1 天）      time_control（advance / schedule / list / cancel）+ runtime 的 sqlite 与调度器；
-                          记忆改走注入：删 memory 工具，加 data\memory.yaml（2026-09-18 晚定稿）
+                          memory 简化成只读：memory() 返回 data\memory.yaml 整段（2026-09-18 晚定稿）
 M5                        验收表 + 动作覆盖率报告 + 探针复跑
 降级验证   已完成（2026-09-18）  停发布器 / 停 broker / 重建发现三例 21/21
                                  （tests\test_degraded_backend.py，破坏性手动跑），
@@ -51,8 +51,8 @@ summarize_state 掉线时字段给 null：原来把 unavailable 说成 on=false�
 time_control 的 advance 只接受秒数（不提供条件等待）：等设备跑完这类目标靠模型轮询
 （advance + inspect_device）。
 runtime 要补 sqlite（schedules / calls 两张表）与调度器。
-记忆照 SMH 的做法走注入：data\memory.yaml 由实验方准备，服务端在 initialize.instructions
-与 observe_home 返回里带出去；不做 memory 读写工具、不落库（见 11 号 §5.7）。
+记忆按 SMH 的口径简化：data\memory.yaml 由实验方准备，memory() 无参数、原样返回整段；
+不做 key-value、不做写入、不落库（见 11 号 §5.7）。工具面仍是 8 个。
 ```
 
 ## 本机环境
