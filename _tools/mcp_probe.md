@@ -9,6 +9,7 @@
 输入   --http <URL> 或 --stdio "<命令行>"（二选一）
        --token-file（默认 ..\_secrets\ha_token.txt，只有 HTTP 传输会带 Authorization 头）
        --call <工具名> --args '<JSON>'（可选）
+       --args-file <路径>（可选，替代 --args；PowerShell 传带引号的 JSON 容易被打散时用）
 输出   工具清单（名字 / 参数 / 必填 / 描述首行）、提示与资源清单、可选的工具调用结果
 读取   令牌文件；stdio 模式下继承当前环境变量（社区 server 多靠环境变量拿 HA 地址与令牌）
 写入   无（探针本身只读；被探的 server 可能写设备，取决于你调哪个工具）

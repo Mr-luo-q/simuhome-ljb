@@ -28,6 +28,7 @@ from mcp.client.streamable_http import streamablehttp_client
 
 DEFAULT_TOKEN = Path(__file__).resolve().parent.parent / "_secrets" / "ha_token.txt"
 MAX_DESCRIPTION = 80
+MAX_PAYLOAD = 4000
 
 # 本机开着系统代理（127.0.0.1:7897）时，httpx 会把 localhost 也发进代理，拿到 502。
 # 探针只连本机 HA，所以显式把本机地址放进 NO_PROXY；子进程（stdio server）也会继承。
@@ -74,13 +75,13 @@ async def print_surface(session: ClientSession) -> None:
 
 
 async def call_one(session: ClientSession, name: str, arguments: dict[str, Any]) -> None:
-    """调一个工具并打印结果（截断到 800 字）。"""
+    """调一个工具并打印结果（截断到 MAX_PAYLOAD 字）。"""
 
     result = await session.call_tool(name, arguments)
     texts = [getattr(item, "text", "") for item in (result.content or [])]
     payload = "\n".join(texts)
     print(f"调用 {name} → isError={result.isError}")
-    print(payload[:800])
+    print(payload[:MAX_PAYLOAD])
 
 
 async def probe_http(url: str, token: str | None, call: str | None, args: dict[str, Any]) -> int:
@@ -120,13 +121,20 @@ def main() -> int:
     parser.add_argument("--token-file", default=str(DEFAULT_TOKEN), help="HTTP 用的令牌文件")
     parser.add_argument("--call", help="可选：调用某个工具名")
     parser.add_argument("--args", default="{}", help="调用参数（JSON）")
+    parser.add_argument(
+        "--args-file",
+        help="调用参数改从文件读（PowerShell 5.1 传带引号的 JSON 容易被打散，复杂参数用这个）",
+    )
     options = parser.parse_args()
 
     if bool(options.http) == bool(options.stdio):
         print("必须二选一：--http 或 --stdio", file=sys.stderr)
         return 2
 
-    arguments = json.loads(options.args)
+    if options.args_file:
+        arguments = json.loads(Path(options.args_file).read_text(encoding="utf-8"))
+    else:
+        arguments = json.loads(options.args)
     if options.http:
         token = load_token(Path(options.token_file))
         return asyncio.run(probe_http(options.http, token, options.call, arguments))
