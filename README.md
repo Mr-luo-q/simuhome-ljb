@@ -44,8 +44,9 @@ git commit -m "说明这次改了什么"
 
 ```text
 source.md                                     自动生成的目录与来源登记表
-finally new paper\HomeAssistant双仓库接口分析\  01~06、08~12 号文档（无 07）
-                                              11 最终设计（实现以它为准）、12 统一粒度
+finally new paper\HomeAssistant双仓库接口分析\  01~06、08~13 号文档（无 07）
+                                              11 最终设计（实现以它为准）、12 统一粒度、
+                                              13 实现现状与未实现项（memory / 预约）
 finally new paper\UbiComp三支柱讨论\12_投稿策略-把三个支柱的故事讲圆.md
                                               投稿策略基线（关键路径）：技术取舍按它判断
 ha_mcp_server\PLAN.md                         MCP 项目的长期计划
