@@ -24,7 +24,7 @@ events:
 
 memory:
   file: ./data/memory.yaml           # 记忆文件：实验方准备，服务端只读，
-                                     # 注入到 initialize.instructions 与 observe_home 返回（见 11 号 §5.7）
+                                     # 由 memory 工具原样返回整段（见 11 号 §5.7）
 
 server:
   transport: stdio              # stdio 或 http

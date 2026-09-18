@@ -85,8 +85,9 @@ HA_UNREACHABLE / UNKNOWN_DEVICE / UNKNOWN_ROOM / DEVICE_UNAVAILABLE / UNSUPPORTE
 SERVICE_ERROR / VERIFY_TIMEOUT / INVALID_TIME / UNKNOWN_KEY / BAD_TARGET / BAD_REQUEST / NOT_IMPLEMENTED
 
 已用到   除 VERIFY_TIMEOUT / INVALID_TIME / UNKNOWN_KEY 外的 9 个
-未用到   三个都是给 M4 准备的：INVALID_TIME（预约时间在过去）、UNKNOWN_KEY（读不存在的记忆键）、
-         VERIFY_TIMEOUT（当前实现里"回读没变"只标 verified=false，不抛这个码）
+未用到   INVALID_TIME 与 VERIFY_TIMEOUT 是给 M4 准备的（预约时间在过去 / 回读超时口径）；
+         UNKNOWN_KEY 是原键值记忆留下的，简化成只读整段后没有 key 了，实际不会用到，
+         先留在错误码表里备用
 ```
 
 ## 3. memory 怎么处理、计划怎么处理
@@ -97,8 +98,8 @@ SERVICE_ERROR / VERIFY_TIMEOUT / INVALID_TIME / UNKNOWN_KEY / BAD_TARGET / BAD_R
 代码      src\home_mcp\backend_ha\tools\memory.py 是空实现 → 抛 NOT_IMPLEMENTED
 契约      memory(op=read|write, key, value?) → {key, value, updated_at}
           错误：UNKNOWN_KEY / BAD_REQUEST / NOT_IMPLEMENTED
-存储      还没有。设计上归 runtime 的 sqlite，表 memory(key, value, updated_at, expires_at)
-落点      ha_mcp_server\data\home_mcp.sqlite3（config.yaml 的 memory.db_path，相对配置文件目录）
+存储      还没有。原设计是 sqlite 的 memory 表，2026-09-18 晚改成读文件（见 3.2）
+落点      ha_mcp_server\data\memory.yaml（config 的 memory.file，相对配置文件目录）
           该目录已在 .gitignore 里（/ha_mcp_server/data/）
 ```
 
@@ -130,11 +131,11 @@ SMH-Bench：记忆是"题目给、模型用"
   判分前提写死："该任务不应在未使用所提供的记忆的情况下，以预期方式解决"
   EIA 的工具面是"查询属性 / 检索服务 / 执行操作"——记忆不在工具面里，是从上下文进来的
 
-我们：记忆是"模型自己写、按需取"
+我们（旧设计）：记忆是"模型自己写、按需取"
   memory(read | write, key, value?) + sqlite 的 memory 表；不自动进上下文，要模型主动调 read
 ```
 
-| 维度 | SMH-Bench（上下文注入） | 我们（工具 + sqlite） |
+| 维度 | SMH-Bench（上下文注入） | 我们旧设计（工具 + sqlite） |
 | --- | --- | --- |
 | 记忆从哪来 | 评测生成，随题面给 | 模型自己写 |
 | 模型怎么拿到 | 每轮都在上下文里 | 主动按 key 取 |
@@ -216,7 +217,7 @@ C 全工具（原设计）         read 与 write 都靠模型自己调：最贴
 三条臂    A 注入 / B 混合 / C 全工具（其余完全一致：同一套工具契约、同一批任务）
 指标      ① 任务成功率 ② 工具调用步数 ③ 非法调用率 ④ 该调未调率 ⑤ 跨会话记忆一致性
 学习成本  再用 N 条轨迹做小规模 SFT（正好接支柱 2），看"到 X% 成功率要多少条轨迹"
-判据      C 臂上 4B 明显差于 B、且训练要明显更多轨迹 → 维持 A（或退成 B）
+判据      C 臂上 4B 明显差于 B、且训练要明显更多轨迹 → 维持只读工具（或退成注入 A）
 ```
 
 对 M4 的影响：

@@ -149,7 +149,7 @@ D:\D_coderesource\simuhome\                    工作区根目录（★ = git �
 │  ├─ reset_simuhome_home.ps1                  仍在用：重置仿真场景
 │  └─ bridge\app.py 等                          已停用（:8010 未监听）
 │
-├─★ finally new paper\                         研究文档与文献（本目录 01~06、08~12；UbiComp 目录另有 1~9 与 12_投稿策略）
+├─★ finally new paper\                         研究文档与文献（本目录 01~06、08~13；UbiComp 目录另有 1~9 与 12_投稿策略）
 ├─★ context\                                   跨会话上下文
 ├─★ README.md / source.md / AGENTS.md
 │
@@ -396,7 +396,7 @@ room_env / devices / doors   留空：环境量按 area + sensor.device_class �
 verify_delay_ms = 500        实测一次命令 + 回读 236~388 ms，300 ms 会误判
 events.exclude_entities      默认排除 sensor.simuhome_virtual_time（占 logbook 91%~96%）
 memory.file                  记忆文件（默认 data\memory.yaml），相对配置文件所在目录解析；
-                             格式与注入方式见 5.7
+                             格式与读取方式见 5.7
 ```
 
 ### 5.6 状态归属与并发
