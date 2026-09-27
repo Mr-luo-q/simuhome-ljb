@@ -1,0 +1,86 @@
+# ha_mcp_universal（v2 分叉：通用化设备接入）
+
+> 本工程是 `ha_mcp_server`（v1）的复制分叉，目标是**通用化接入 HA 上的任意设备**
+> （米家、Zigbee/Matter、HACS 插件…），而不是为某个品牌写特例。
+>
+> ```text
+> 现状      代码与 v1 完全一致，改造尚未开始
+> 设计文档  方案-通用化设备接入设计.md（认领 / 角色 / 动作三层拆解，约 4~5 天工作量）
+> v1 关系   v1 保持不动，论文主实验口径不变；v2 的沙盒 claim 规则用于复现 v1 行为
+> 运行方式  与 v1 相同，注意用本目录的 config.yaml（不入库，从 config.example.yaml 复制）
+> ```
+
+以下内容复制自 v1 的 README，未改动（描述的是当前代码状态，改造后需要同步更新）。
+
+自建的 MCP server：对外暴露 8 个工具（观察、控制、时间、验证、记忆）；记忆按 SMH 的口径
+简化成只读（整段返回、不给 key、不做写入），先接 Home Assistant，架构上可替换后端。
+
+```text
+当前状态    M1~M3 完成：8 个工具都已建出；observe_home / inspect_room / inspect_device /
+           query_events / execute_action / check_goal 六个做实并在真 HA 上跑通
+           （含写路径与还原验证）；time_control / memory 仍是 NOT_IMPLEMENTED
+新计划      memory 简化成只读：memory() 返回 data\memory.yaml 的整段内容，
+           不做 key-value 与写入（见 11 号 §5.7、13 号第 3 节）；工具面仍是 8 个
+设计文档    ..\finally new paper\HomeAssistant双仓库接口分析\11_最终设计_接入层与统一语义MCP.md
+长期计划    PLAN.md（M1~M5 的进度与分期）
+解耦验证    ..\finally new paper\HomeAssistant双仓库接口分析\_架构探针\（六项报告）
+```
+
+## 目录
+
+```text
+pyproject.toml          依赖 pin（mcp==1.26.0）+ 入口 ha-mcp
+config.example.yaml     配置模板；复制成 config.yaml 后令牌用 ${HA_TOKEN} 注入
+src\home_mcp\
+  entry.py / server.py / errors.py / runtime.py     协议壳与基础设施
+  contract\             工具契约、条件判定、时间语义、回传通道（只依赖标准库）
+  backend_ha\           HA 后端：client（REST+WS）、mapping（注册表映射）、tools\（8 个工具）
+tests\
+  fake_ha.py            离线夹具（真实注册表节选）
+  test_contract_tools.py 契约测试 12 项
+  test_e2e_real_ha.py   端到端：起 stdio 服务跑 21 项验收（含写路径与还原）
+  test_llm_smoke.py     大模型冒烟：DeepSeek 直连服务，两轮 9 项（真开灯并还原）
+  test_degraded_backend.py 降级与恢复：停发布器 / 停 broker / 重建发现（破坏性，手动跑）
+```
+
+每个 `.py` 都配一份同名中文 `.md`，说明职责、输入输出与边界。
+
+## 怎么跑
+
+```powershell
+cd D:\D_coderesource\simuhome\ha_mcp_server
+$env:HA_TOKEN = (Get-Content ..\_secrets\ha_token.txt -Raw).Trim()
+$env:MCP_TOKEN = "local-dev-token"
+
+# 1 契约测试（离线，不需要 HA）
+C:\ProgramData\anaconda3\python.exe tests\test_contract_tools.py
+
+# 2 只装配不起服务：打印 8 个工具名
+$env:PYTHONPATH = "$PWD\src"
+C:\ProgramData\anaconda3\python.exe -m home_mcp.entry --config config.yaml --dry-run
+
+# 3 端到端：按 stdio 起服务，跑 21 项验收（含写路径，测试后自动还原）
+C:\ProgramData\anaconda3\python.exe tests\test_e2e_real_ha.py --config config.yaml
+
+# 4 大模型冒烟：先在 .env 里填 DEEPSEEK_API_KEY，再跑（模型选工具 / 参数合规 / 不谎报）
+C:\ProgramData\anaconda3\python.exe tests\test_llm_smoke.py --config config.yaml
+
+# 5 降级与恢复（破坏性：会停发布器 / 停 broker / 清发现配置，跑完自动拉回）
+C:\ProgramData\anaconda3\python.exe tests\test_degraded_backend.py --config config.yaml --case all
+```
+
+## 最近一次实测结论
+
+```text
+六条工具在真 HA 上通过：四条只读（3 房间 / 25 实体 / doors=null / 事件两层过滤）
+加写与判定两条（灯 / 空调 / 风扇写路径回读一致、越界与不支持动作被本地拦下、
+check_goal 两组判定、测试后三台设备还原）；time_control / memory 返回 NOT_IMPLEMENTED。
+契约 12/12、端到端 21/21、大模型冒烟 9/9（模型先 inspect 再 execute_action，
+实机 on=true，随后还原 off）。
+降级与恢复 21/21：停发布器与停 broker 都被 DEVICE_UNAVAILABLE 拦下、命令不下发，
+掉线期间六字段为 null；broker 重启后发布器自动重连；reset 重建后 25 实体 /
+16 条设备注册无重复、rename dry-run 为 0。
+逐项证据与沿路修的问题见
+..\finally new paper\HomeAssistant双仓库接口分析\11_最终设计_接入层与统一语义MCP.md §7，
+本文不重复。
+```

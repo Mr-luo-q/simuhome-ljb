@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "home-mcp"
+version = "0.1.0"
+description = "统一语义的家庭环境 MCP server：先接 Home Assistant，架构上可换后端"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp==1.26.0",
+    "PyYAML>=6.0",
+    "websockets>=13.0",
+]
+
+[project.scripts]
+ha-mcp = "home_mcp.entry:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

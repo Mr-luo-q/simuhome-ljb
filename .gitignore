@@ -6,6 +6,7 @@
 !/source.md
 !/finally new paper/
 !/ha_mcp_server/
+!/ha_mcp_universal/
 !/simuhome_mqtt_publisher/
 !/old_simuhome_bridge_project/
 !/_tools/
@@ -31,6 +32,11 @@ __pycache__/
 # MCP server 的本地配置（含令牌占位）与运行时数据
 /ha_mcp_server/config.yaml
 /ha_mcp_server/data/
+
+# v2 分叉（通用化接入）：同样是本地配置与运行时数据不入库
+/ha_mcp_universal/config.yaml
+/ha_mcp_universal/data/
+/ha_mcp_universal/.env
 
 # MQTT 工程的运行时日志
 /simuhome_mqtt_publisher/logs/
