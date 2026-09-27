@@ -12,6 +12,13 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..contract import action_payload, actions_for_kind
+from ..registry import (
+    ClaimResult,
+    ClaimRule,
+    claim_entities,
+    default_rules,
+    resolve_device_id,
+)
 
 
 IDENTIFIER_PREFIX = "simuhome_"
@@ -56,6 +63,7 @@ class RegistryView:
     sensors_by_area: dict[str, list[str]] = field(default_factory=dict)  # 房间 → 传感器实体 id
     areas: dict[str, str] = field(default_factory=dict)                  # 房间 id → 名称
     time_entity: str | None = None                                       # 虚拟时间实体
+    claimed: ClaimResult = field(default_factory=ClaimResult)            # 认领结果（M2 角色投影用）
 
     def devices_in_area(self, area_id: str) -> list[str]:
         """列出某个房间里的可控设备逻辑 id。"""
@@ -221,54 +229,73 @@ def build_view(
     entities: list[dict[str, Any]],
     devices: list[dict[str, Any]],
     areas: list[dict[str, Any]],
+    *,
+    rules: list[ClaimRule] | None = None,
+    aliases: dict[str, Any] | None = None,
+    area_alias: dict[str, str] | None = None,
+    hide_empty: bool = False,
 ) -> RegistryView:
-    """把三张注册表拼成 RegistryView：设备行、房间传感器、房间名、时间实体。"""
+    """把三张注册表拼成 RegistryView：设备行、房间传感器、房间名、时间实体。
+
+    M1 相对 v1 的三处改动：
+      ① 认领规则可配置（`rules`；不传就用 v1 的默认规则，行为不变）
+      ② 环境量只取"所在设备没有可控实体"的传感器 —— 冰箱的冷藏室温度不会被当成房间温度
+      ③ 区域支持别名与空区域过滤（`area_alias` / `hide_empty`，默认关闭，保持 v1 行为）
+    """
 
     view = RegistryView()
-    view.areas = {str(area["area_id"]): str(area.get("name") or area["area_id"]) for area in areas}
+    active_rules = rules or default_rules()
+    claim = claim_entities(entities, devices, active_rules)
+    view.claimed = claim
 
-    # 设备注册表：拿到 HA 设备 id → (逻辑 id, 房间, 名称)
-    device_index: dict[str, tuple[str, str | None, str]] = {}
-    for device in devices:
-        logical = logical_id_from_identifiers(device.get("identifiers"))
-        if logical is None:
+    device_index = {str(device.get("id")): device for device in devices}
+    control_devices = claim.devices_with_control()
+
+    # 设备行：M1 仍按 v1 的"域 + unique_id 后缀"投影，M2 会换成角色推断
+    for item in claim.entities:
+        if item.kind not in ("switch", "climate", "fan"):
             continue
-        device_index[str(device["id"])] = (
-            logical,
-            device.get("area_id"),
-            str(device.get("name") or logical),
+        device_meta = device_index.get(item.ha_device_id)
+        if device_meta is None:
+            continue
+        logical = item.logical_id or resolve_device_id(
+            item.ha_device_id,
+            str(device_meta.get("name") or ""),
+            device_meta.get("identifiers"),
+            aliases,
+        )
+        view.devices[logical] = DeviceRow(
+            device_id=logical,
+            entity_id=item.entity_id,
+            domain=item.domain,
+            kind=item.kind,
+            area_id=item.area_id,
+            ha_device_id=item.ha_device_id,
+            name=str(device_meta.get("name") or logical),
         )
 
-    # 实体注册表：分出可控设备实体与传感器实体
+    # 环境量传感器：认领到的 sensor，且它所在设备没有可控实体（否则那是设备内部测量值）
+    for item in claim.entities:
+        if item.domain != "sensor" or not item.area_id:
+            continue
+        if item.ha_device_id in control_devices:
+            continue
+        view.sensors_by_area.setdefault(item.area_id, []).append(item.entity_id)
+
+    # 虚拟时间实体：仍按 v1 的 unique_id 约定找
     for entity in entities:
-        if entity.get("platform") != "mqtt":
-            continue
-        unique_id = str(entity.get("unique_id") or "")
-        entity_id = str(entity.get("entity_id") or "")
-        domain = entity_id.split(".")[0] if "." in entity_id else ""
-        ha_device_id = str(entity.get("device_id") or "")
-        device_meta = device_index.get(ha_device_id)
-        area_id = device_meta[1] if device_meta else entity.get("area_id")
+        if str(entity.get("unique_id") or "") == TIME_UNIQUE_ID:
+            view.time_entity = str(entity.get("entity_id") or "")
+            break
 
-        split = split_unique_id(unique_id)
-        if split is not None and device_meta is not None:
-            logical, kind = split
-            view.devices[logical] = DeviceRow(
-                device_id=logical,
-                entity_id=entity_id,
-                domain=domain,
-                kind=kind,
-                area_id=area_id,
-                ha_device_id=ha_device_id,
-                name=device_meta[2],
-            )
+    # 区域：别名覆盖 + 可选的空区域过滤
+    alias_map = {str(key): str(value) for key, value in (area_alias or {}).items()}
+    for area in areas:
+        area_id = str(area["area_id"])
+        has_devices = any(row.area_id == area_id for row in view.devices.values())
+        has_env = bool(view.sensors_by_area.get(area_id))
+        if hide_empty and not (has_devices or has_env):
             continue
-
-        if unique_id == TIME_UNIQUE_ID:
-            view.time_entity = entity_id
-            continue
-
-        if unique_id.startswith(UNIQUE_ID_PREFIX) and area_id:
-            view.sensors_by_area.setdefault(str(area_id), []).append(entity_id)
+        view.areas[area_id] = alias_map.get(area_id) or str(area.get("name") or area_id)
 
     return view

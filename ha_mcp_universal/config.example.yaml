@@ -13,6 +13,33 @@ room_env: {}                    # 留空：按 area + sensor.device_class 推导
 devices: {}                     # 留空：映射表由实体注册表在启动时生成，配置只作覆盖
 doors: []                       # 当前没有门磁实体，inspect_room 的 doors 恒为 null
 
+# 认领规则（M1 起）：决定"哪些实体属于我们"。整段留空 = v1 行为
+# （platform==mqtt 且 unique_id 以 simuhome_ 开头，且以 _switch/_climate/_fan 结尾）
+claim:
+  - name: sandbox               # 沙盒投影（SimuHome → MQTT → HA）
+    platforms: [mqtt]
+    unique_id_prefix: simuhome_
+    id_source: identifier
+    kind_by_suffix:
+      _switch: switch
+      _climate: climate
+      _fan: fan
+  - name: xiaomi                # 米家：只写规则，不写专有代码
+    platforms: [xiaomi_home]
+    domains: [switch, light, climate, fan, cover, number, select, sensor]
+    id_source: device_name
+    exclude_category: [config, diagnostic]
+    exclude_entities: ["button.*", "update.*", "*_reset_*"]
+
+# 房间显示：alias 改对外名字（不改 HA），hide_empty 隐藏"既没设备也没环境量"的区域
+areas:
+  alias: {}
+  hide_empty: false
+
+# 设备别名文件：首次扫描生成，可手工改（中文设备名没法自动生成有意义的 id）
+aliases:
+  file: ./data/device_aliases.yaml
+
 execution:
   verify_after_action: true
   verify_delay_ms: 500          # 实测一次命令 + 回读 236~388 ms，300 ms 会误判

@@ -6,12 +6,28 @@
 
 ```text
 输入   entity_registry / device_registry / area_registry 三个列表
-输出   RegistryView{devices, sensors_by_area, areas, time_entity}
+       + 可选：rules（认领规则）/ aliases（别名）/ area_alias（区域改名）/ hide_empty（隐藏空区域）
+输出   RegistryView{devices, sensors_by_area, areas, time_entity, claimed}
 读取   无（只吃传入的注册表数据）
 写入   无（纯函数）
 不负责   不发请求、不读状态（环境量的 device_class 在 observe_home 里从状态取）
 对应文件 src\home_mcp\backend_ha\mapping.py
 ```
+
+## M1 相对 v1 的三处改动
+
+```text
+① 认领规则可配置   实体是否属于我们，由 registry\claim.py 的 ClaimRule 决定；
+                  不传规则时用默认规则（platform==mqtt + simuhome_ 前缀 + _switch/_climate/_fan 后缀），
+                  与 v1 行为等价
+② 环境量归属更严   只有"所在设备没有可控实体"的传感器才算房间环境量 ——
+                  冰箱的冷藏室温度属于冰箱这台设备，不会被当成房间温度
+③ 区域可别名/可隐藏 area_alias 改对外房间名；hide_empty=True 时，
+                  既没有投影设备、也没有环境量的区域不出现在 observe_home（默认 False = v1 行为）
+```
+
+`RegistryView.claimed` 保存认领结果（按规则分组、有哪些设备带可控实体），
+供 M2 的角色投影与启动日志使用；它不进入任何工具返回，属于内部字段。
 
 ## 三条转换规则（都来自实测）
 
