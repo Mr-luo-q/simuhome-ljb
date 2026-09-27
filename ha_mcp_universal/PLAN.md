@@ -16,9 +16,20 @@ M1  已完成（2026-09-27）  认领层 + 区域别名/空区域过滤 + 别名
     实测    认领结果 {'sandbox': 25, 'xiaomi': 10}；投影设备 12 台；可见房间 3 个
             （hide_empty=true 把米家那个空区域隐藏了）；待投影实体 23 个
             米家的 button/event 被域白名单挡住（"恢复出厂设置"没进认领）
-M2  下一步                角色推断 + 多值设备拆分 + 六字段聚合（把待投影的 23 个实体变成设备）
-M3                        动作生成 + 写与回读（含云设备窗口）
-M4                        命名泛化（若采用方案 B）+ 回归 + 第三方集成抽样
+M2  已完成（2026-09-27）  角色推断 + 多值拆分 + 六字段聚合 + 动作生成与写路径
+    新增    registry\roles.py（角色推断/拆分/六字段）、registry\actions.py（动作与执行方案）
+    改造    mapping.py（按角色投影设备、summarize_device_row/device_actions_v2/plan_row_execution）、
+            inspect_device.py、execute_action.py（服务映射与容差回读都改为角色驱动）
+    测试    tests\test_roles.py 4/4；契约回归 12/12；认领 6/6；真机端到端 21/21
+    真机    冰箱被拆成两台逻辑设备：
+              inspect_device(cn_911432173_cold)  → {mode: 手动, target: 4, current: 2}
+                    动作 set_mode(enum=手动/智能/假日/速冷/速冻) + set_temperature(2~8, 步长 1)
+              execute_action(set_temperature, 5) → number.set_value → verified=true（约 3.8 s 落定）
+                    越界 99 → BAD_REQUEST（本地拦下）；随后还原成 4
+              observe_home 房间 4 个：沙盒 3 个 + 米家区域（别名 home，里面是冰箱两台逻辑设备）
+    口径    v2 起"本家庭"= 被 claim 规则认领的实体；端到端里 query_events 的断言已按此放宽
+M3  下一步                命名泛化（若采用方案 B）+ 第三方集成抽样 + 文档收尾
+M4                        回归与验收记录（含冰箱的读写回放）
 ```
 
 设计与规格以 `..\finally new paper\HomeAssistant双仓库接口分析\11_最终设计_接入层与统一语义MCP.md` 为准；

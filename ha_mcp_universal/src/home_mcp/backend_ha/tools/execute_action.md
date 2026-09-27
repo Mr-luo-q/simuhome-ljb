@@ -1,5 +1,19 @@
 # `execute_action.py` 说明
 
+## M2 改动（2026-09-27）
+
+```text
+动作来源   不再按 kind 写死：device_actions_v2(row, by_id) 给动作清单，
+            plan_row_execution(row, action, params, by_id) 给执行方案
+            （写哪个实体、调哪个服务、参数写进哪个字段、回读期望什么）
+服务映射   由 registry\actions.py 的 (动作, 域) 表给出：
+            number.set_value / select.select_option / light.turn_on(brightness_pct) /
+            fan.set_percentage / cover.set_cover_position / climate.*
+可用性     角色实体全部掉线 → DEVICE_UNAVAILABLE；要写的那台实体掉线 → 同样拦下
+回读比较   数值带容差（设备自报步长的一半），其它按字符串相等；
+           配置里的 verify_delay_ms × verify_attempts 决定窗口（云设备建议 800×4）
+```
+
 ```text
 状态   已实现（M3）
 职责   执行一次规范动作：四道闸门 → 调 HA 服务 → 回读验证

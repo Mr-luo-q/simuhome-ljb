@@ -15,9 +15,13 @@ from ..contract import action_payload, actions_for_kind
 from ..registry import (
     ClaimResult,
     ClaimRule,
+    build_actions,
     claim_entities,
     default_rules,
+    plan_execution,
+    project_devices,
     resolve_device_id,
+    summarize_device,
 )
 
 
@@ -53,6 +57,8 @@ class DeviceRow:
     area_id: str | None       # 房间，来自设备注册表
     ha_device_id: str         # HA 的设备 uuid
     name: str                 # 设备显示名
+    roles: dict[str, Any] = field(default_factory=dict)    # 角色表（M2）：power/mode/target/level/position/current
+    extras: dict[str, Any] = field(default_factory=dict)   # 未映射成角色的只读实体
 
 
 @dataclass
@@ -196,6 +202,47 @@ def device_actions(kind: str, entity_state: dict[str, Any] | None) -> list[dict[
     return actions
 
 
+def summarize_device_row(row: "DeviceRow", by_id: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """按角色表取六字段（M2）；没有角色表的老式行回退到按 kind 的摘要。"""
+
+    if not row.roles:
+        return summarize_state(row.kind, by_id.get(row.entity_id))
+    device = _as_projected(row)
+    return summarize_device(device, by_id)
+
+
+def device_actions_v2(row: "DeviceRow", by_id: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    """按角色表生成动作清单（M2）；没有角色表的老式行回退到按 kind 的动作。"""
+
+    if not row.roles:
+        return device_actions(row.kind, by_id.get(row.entity_id))
+    return build_actions(_as_projected(row), by_id)
+
+
+def plan_row_execution(
+    row: "DeviceRow", action: str, params: dict[str, Any], by_id: dict[str, dict[str, Any]]
+):
+    """把一次动作翻成执行方案（M2）；动作不支持时抛 KeyError。"""
+
+    return plan_execution(_as_projected(row), action, params, by_id)
+
+
+def _as_projected(row: "DeviceRow"):
+    """把 DeviceRow 包装成 registry.roles.ProjectedDevice（角色表是同一份数据）。"""
+
+    from ..registry.roles import ProjectedDevice
+
+    return ProjectedDevice(
+        device_id=row.device_id,
+        ha_device_id=row.ha_device_id,
+        area_id=row.area_id,
+        name=row.name,
+        kind=row.kind,
+        roles=dict(row.roles),
+        extras=dict(row.extras),
+    )
+
+
 def resolve_target(
     by_id: dict[str, dict[str, Any]], view: "RegistryView", target: str
 ) -> tuple[Any, str]:
@@ -219,7 +266,7 @@ def resolve_target(
     row = view.devices.get(head)                            # 设备六字段
     if row is None:
         raise KeyError(f"既不是房间也不是设备：{target}")
-    summary = summarize_state(row.kind, by_id.get(row.entity_id))
+    summary = summarize_device_row(row, by_id)
     if field not in summary or summary[field] is None:
         raise KeyError(f"设备 {head} 没有字段 {field}，可选 {sorted(k for k, v in summary.items() if v is not None)}")
     return summary[field], row.entity_id
@@ -234,6 +281,7 @@ def build_view(
     aliases: dict[str, Any] | None = None,
     area_alias: dict[str, str] | None = None,
     hide_empty: bool = False,
+    states: list[dict[str, Any]] | None = None,
 ) -> RegistryView:
     """把三张注册表拼成 RegistryView：设备行、房间传感器、房间名、时间实体。
 
@@ -248,30 +296,22 @@ def build_view(
     claim = claim_entities(entities, devices, active_rules)
     view.claimed = claim
 
-    device_index = {str(device.get("id")): device for device in devices}
     control_devices = claim.devices_with_control()
+    state_index = {str(item.get("entity_id")): item for item in (states or [])}
 
-    # 设备行：M1 仍按 v1 的"域 + unique_id 后缀"投影，M2 会换成角色推断
-    for item in claim.entities:
-        if item.kind not in ("switch", "climate", "fan"):
-            continue
-        device_meta = device_index.get(item.ha_device_id)
-        if device_meta is None:
-            continue
-        logical = item.logical_id or resolve_device_id(
-            item.ha_device_id,
-            str(device_meta.get("name") or ""),
-            device_meta.get("identifiers"),
-            aliases,
-        )
-        view.devices[logical] = DeviceRow(
-            device_id=logical,
-            entity_id=item.entity_id,
-            domain=item.domain,
-            kind=item.kind,
-            area_id=item.area_id,
-            ha_device_id=item.ha_device_id,
-            name=str(device_meta.get("name") or logical),
+    # 设备行：M2 起按角色投影（含多值拆分）；只有 current 的设备（房间传感器组）不进设备清单
+    for projected in project_devices(claim.entities, devices, state_index, aliases):
+        primary = projected.primary
+        view.devices[projected.device_id] = DeviceRow(
+            device_id=projected.device_id,
+            entity_id=primary.entity_id if primary else "",
+            domain=primary.domain if primary else "",
+            kind=projected.kind,
+            area_id=projected.area_id,
+            ha_device_id=projected.ha_device_id,
+            name=projected.name,
+            roles=dict(projected.roles),
+            extras=dict(projected.extras),
         )
 
     # 环境量传感器：认领到的 sensor，且它所在设备没有可控实体（否则那是设备内部测量值）

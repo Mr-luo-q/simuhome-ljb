@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from ...errors import ErrorCode, HomeMcpError
-from ..mapping import device_actions, summarize_state
+from ..mapping import device_actions_v2, summarize_device_row
 
 
 def run(context: Any, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -27,13 +27,14 @@ def run(context: Any, arguments: dict[str, Any]) -> dict[str, Any]:
             f"可选设备：{sorted(context.view.devices)}",
         )
 
-    state = context.client.get_state(row.entity_id)
-    summary = summarize_state(row.kind, state)
+    states = context.client.get_states()
+    by_id = {str(item.get("entity_id")): item for item in states}
+    summary = summarize_device_row(row, by_id)
     return {
         "device_id": row.device_id,
         "entity_id": row.entity_id,
         "area_id": row.area_id,
         "kind": row.kind,
         "state": summary,
-        "actions": device_actions(row.kind, state),
+        "actions": device_actions_v2(row, by_id),
     }

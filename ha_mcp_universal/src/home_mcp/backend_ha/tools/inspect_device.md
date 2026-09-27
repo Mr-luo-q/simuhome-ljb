@@ -1,5 +1,16 @@
 # `inspect_device.py` 说明
 
+## M2 改动（2026-09-27）
+
+```text
+状态摘要   从"按 kind 写死"改成"按角色表取六字段子集"：
+           summarize_device_row(row, by_id)，设备没有的角色不出现在返回里
+           （冰箱没有 power 角色，所以它的返回里没有 on 字段）
+动作清单   从 device_actions_v2(row, by_id) 生成：角色 → 8 动作词表，参数范围来自实体属性
+           （set_mode 的 enum 取 options/hvac_modes；set_temperature 的 min/max/step 取实体属性）
+读取       改为一次拉全部状态（get_states）再建索引：多角色设备需要一次读到多个实体的状态
+```
+
 ```text
 状态   已实现（M2）
 职责   读一台设备：当前状态 + 可用动作与参数范围

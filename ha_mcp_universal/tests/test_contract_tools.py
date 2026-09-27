@@ -43,7 +43,7 @@ class FixtureContext:
 
     def __init__(self) -> None:
         self.client = FakeRestClient()
-        self.view = build_view(ENTITIES, DEVICES, AREAS)
+        self.view = build_view(ENTITIES, DEVICES, AREAS, states=STATES)
         self.config = {
             "events": {"exclude_entities": ["sensor.simuhome_virtual_time"]},
             "execution": {"verify_delay_ms": 10, "verify_attempts": 2},   # 测试里不等 500 ms

@@ -16,7 +16,7 @@ import time
 from typing import Any
 
 from ...errors import ErrorCode, HomeMcpError
-from ..mapping import device_actions, summarize_state
+from ..mapping import device_actions_v2, plan_row_execution, summarize_device_row
 
 
 # 规范动作 → (HA 服务名, 参数改名表)；两个后端的差异都在这一张表里
@@ -111,16 +111,23 @@ def run(context: Any, arguments: dict[str, Any]) -> dict[str, Any]:
             ErrorCode.UNKNOWN_DEVICE, f"没有这台设备：{device_id}", f"可选：{sorted(context.view.devices)}"
         )
 
-    state = context.client.get_state(row.entity_id)
-    raw_state = str((state or {}).get("state") or "")
-    if raw_state in ("unavailable", "unknown"):
+    states = context.client.get_states()
+    by_id = {str(item.get("entity_id")): item for item in states}
+
+    # 闸门②：设备可用性 —— 角色实体全掉线才算不可用（多角色设备只要有一路活着就能继续判）
+    refs = list(row.roles.values()) or []
+    role_states = [by_id.get(ref.entity_id) for ref in refs] or [by_id.get(row.entity_id)]
+    if all(_is_unavailable(item) for item in role_states):
+        raw_state = str((role_states[0] or {}).get("state") or "unavailable")
         raise HomeMcpError(
             ErrorCode.DEVICE_UNAVAILABLE,
             f"{device_id} 当前不可用（{raw_state}）",
             "发布器或 broker 可能掉线，稍后重试；此时发命令会假成功",
         )
 
-    actions = {item["action"]: item for item in device_actions(row.kind, state)}
+    # 闸门③：动作支持 —— 动作清单按角色生成（M2）
+    raw_params = arguments.get("params") or {}
+    actions = {item["action"]: item for item in device_actions_v2(row, by_id)}
     spec = actions.get(action_name)
     if spec is None:
         raise HomeMcpError(
@@ -128,25 +135,38 @@ def run(context: Any, arguments: dict[str, Any]) -> dict[str, Any]:
             f"{device_id} 不支持动作 {action_name}",
             f"可用动作：{sorted(actions)}",
         )
-    cleaned = _validate_params(action_name, spec, arguments.get("params") or {})
+    try:
+        plan = plan_row_execution(row, action_name, raw_params if isinstance(raw_params, dict) else {}, by_id)
+    except KeyError as err:
+        raise HomeMcpError(ErrorCode.UNSUPPORTED_ACTION, str(err), f"可用动作：{sorted(actions)}") from err
+    if _is_unavailable(by_id.get(plan.entity_id)):
+        raise HomeMcpError(
+            ErrorCode.DEVICE_UNAVAILABLE,
+            f"{device_id} 的目标实体当前不可用（{plan.entity_id}）",
+            "稍后重试；此时发命令会假成功",
+        )
 
-    service, rename = ACTION_SERVICE[action_name]
-    payload = {rename.get(key, key): value for key, value in cleaned.items()}
-    before = summarize_state(row.kind, state)
+    # 闸门④：参数范围（本地拦下，越界不发给 HA）
+    cleaned = _validate_params(action_name, spec, raw_params)
+
+    payload: dict[str, Any] = {}
+    if plan.field and cleaned:
+        payload[plan.field] = next(iter(cleaned.values()))
     started = time.perf_counter()
-    context.client.call_service(row.domain, service, payload, entity_id=row.entity_id)
-    steps = [{"target": row.entity_id, "service": f"{row.domain}.{service}", "data": payload}]
+    context.client.call_service(plan.domain, plan.service, payload, entity_id=plan.entity_id)
+    steps = [{"target": plan.entity_id, "service": f"{plan.domain}.{plan.service}", "data": payload}]
 
     execution = context.config.get("execution") or {}
     delay_ms = int(execution.get("verify_delay_ms", 500))
     attempts = int(execution.get("verify_attempts", 3))
-    expected = _expected_state(action_name, cleaned, before)
-    state_after = before
+    expected = plan.expected
+    state_after = summarize_device_row(row, by_id)
     verified = expected is None
     for _ in range(attempts):
         time.sleep(delay_ms / 1000)
-        state_after = summarize_state(row.kind, context.client.get_state(row.entity_id))
-        if expected is not None and state_after.get(expected[0]) == expected[1]:
+        fresh = {str(item.get("entity_id")): item for item in context.client.get_states()}
+        state_after = summarize_device_row(row, fresh)
+        if expected is not None and _matches(state_after.get(expected[0]), expected[1], spec):
             verified = True
             break
 
@@ -165,3 +185,26 @@ def run(context: Any, arguments: dict[str, Any]) -> dict[str, Any]:
             "服务调用已成功，状态可能稍后才变（不算失败）"
         )
     return result
+
+
+def _is_unavailable(state: dict[str, Any] | None) -> bool:
+    """实体掉线（unavailable / unknown）或根本读不到。"""
+
+    raw = str((state or {}).get("state") or "")
+    return raw in ("", "unavailable", "unknown")
+
+
+def _matches(actual: Any, expected: Any, spec: dict[str, Any]) -> bool:
+    """回读比较：数值带容差（设备自报步长的一半），其它按相等。"""
+
+    if actual is None or expected is None:
+        return actual is expected
+    if isinstance(actual, (int, float)) and isinstance(expected, (int, float)):
+        step = 0.0
+        for param in (spec.get("params") or {}).values():
+            if param.get("step"):
+                step = float(param["step"])
+                break
+        tolerance = max(step / 2, 1e-6)
+        return abs(float(actual) - float(expected)) <= tolerance
+    return str(actual) == str(expected)

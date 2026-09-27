@@ -131,6 +131,8 @@ class ClaimedEntity:
     area_id: str | None
     unique_id: str
     platform: str
+    device_class: str | None = None      # 来自实体注册表（状态里可能没有）
+    unit: str | None = None
 
     @property
     def controllable(self) -> bool:
@@ -186,8 +188,6 @@ def claim_entities(
             logical = None
             if rule.id_source == "identifier":
                 logical = _logical_id_from_identifier(device.get("identifiers"), rule.unique_id_prefix)
-            elif rule.id_source in ("device_name", "entity_name"):
-                logical = str(device.get("name_by_user") or device.get("name") or "") or None
             entity_id = str(entity.get("entity_id") or "")
             result.entities.append(
                 ClaimedEntity(
@@ -200,6 +200,8 @@ def claim_entities(
                     area_id=str(area_id) if area_id else None,
                     unique_id=str(entity.get("unique_id") or ""),
                     platform=str(entity.get("platform") or ""),
+                    device_class=str(entity.get("device_class") or "") or None,
+                    unit=str(entity.get("unit_of_measurement") or "") or None,
                 )
             )
             result.by_rule[rule.name] = result.by_rule.get(rule.name, 0) + 1

@@ -42,8 +42,8 @@ aliases:
 
 execution:
   verify_after_action: true
-  verify_delay_ms: 500          # 实测一次命令 + 回读 236~388 ms，300 ms 会误判
-  verify_attempts: 3
+  verify_delay_ms: 800          # 本地 MQTT 一次命令 + 回读 236~388 ms；云设备（米家）落定可达数秒
+  verify_attempts: 4
 
 events:
   exclude_entities:             # query_events 默认排除的噪声源，实测占 logbook 的 91%

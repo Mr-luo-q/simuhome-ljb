@@ -69,9 +69,10 @@ async def run_check(config_path: Path) -> int:
             home = call_payload(await session.call_tool("observe_home", {}))
             rooms = (home.get("data") or {}).get("rooms", {})
             metrics = (home.get("data") or {}).get("counts", {}).get("metrics", [])
+            sandbox_rooms = {"living_room", "kitchen", "utility_room"}
             record(
-                "observe_home：3 房间 + 4 环境量",
-                bool(home.get("ok")) and len(rooms) == 3 and len(metrics) == 4,
+                "observe_home：沙盒 3 房间都在 + 4 环境量（v2 允许额外认领房间）",
+                bool(home.get("ok")) and sandbox_rooms <= set(rooms) and len(metrics) == 4,
                 f"rooms={len(rooms)} metrics={metrics} time={(home.get('data') or {}).get('time')}",
             )
 
@@ -150,12 +151,17 @@ async def run_check(config_path: Path) -> int:
 
             events = call_payload(await session.call_tool("query_events", {"since": hours_ago(8), "limit": 50}))
             event_items = (events.get("data") or {}).get("events", [])
+            # v2 起认领的实体不止 simuhome：只要不是虚拟时间、且都在"被认领的实体"里就算过
             record(
-                "query_events(近 8 小时)：非空、无虚拟时间、只含本家庭实体",
+                "query_events(近 8 小时)：非空、无虚拟时间、无外部集成噪声",
                 bool(events.get("ok"))
                 and len(event_items) > 0
                 and all("virtual_time" not in (item.get("entity_id") or "") for item in event_items)
-                and all((item.get("entity_id") or "").startswith(HOME_PREFIXES) for item in event_items),
+                and all(
+                    (item.get("entity_id") or "").startswith(HOME_PREFIXES)
+                    or "midjd6" in (item.get("entity_id") or "")     # 已认领的米家冰箱实体
+                    for item in event_items
+                ),
                 f"matched={(events.get('data') or {}).get('counts', {}).get('matched')} "
                 f"returned={len(event_items)}",
             )

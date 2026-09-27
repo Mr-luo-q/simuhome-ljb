@@ -8,6 +8,19 @@ v2 把它们变成数据：配置里的 claim 规则 + 可编辑的别名文件�
 from __future__ import annotations
 
 from .aliases import auto_device_id, ensure_aliases_file, load_aliases, resolve_device_id
+from .actions import Execution, action_names, build_actions, plan_execution
+from .roles import (
+    FIELD_ORDER,
+    ROLE_TO_FIELD,
+    ROLE_ORDER,
+    EntityRef,
+    ProjectedDevice,
+    project_devices,
+    qualifier_of,
+    role_of,
+    roles_for_entity,
+    summarize_device,
+)
 from .claim import (
     CONTROLLABLE_DOMAINS,
     ClaimedEntity,
@@ -31,4 +44,18 @@ __all__ = [
     "ensure_aliases_file",
     "load_aliases",
     "resolve_device_id",
+    "Execution",
+    "action_names",
+    "build_actions",
+    "plan_execution",
+    "EntityRef",
+    "ProjectedDevice",
+    "ROLE_ORDER",
+    "FIELD_ORDER",
+    "ROLE_TO_FIELD",
+    "project_devices",
+    "qualifier_of",
+    "role_of",
+    "roles_for_entity",
+    "summarize_device",
 ]

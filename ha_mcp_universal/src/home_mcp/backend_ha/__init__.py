@@ -35,6 +35,7 @@ def load(config: dict[str, Any]) -> dict[str, Callable[[dict[str, Any]], dict[st
     options = ha_client_options(config)
     rest, ws = build_clients(**options)
     entities, devices, areas = ws.fetch_registries()
+    states = rest.get_states()
 
     # 认领规则（不配 claim 段时 = v1 行为）
     rules = rules_from_config(config)
@@ -52,6 +53,7 @@ def load(config: dict[str, Any]) -> dict[str, Callable[[dict[str, Any]], dict[st
         aliases=aliases,
         area_alias=areas_cfg.get("alias") or {},
         hide_empty=bool(areas_cfg.get("hide_empty", False)),
+        states=states,
     )
 
     # 首次启动给"认领到的设备"生成别名（文件不存在时创建；已有条目不覆盖）

@@ -100,6 +100,41 @@ ENTITIES = [
     },
 ]
 
+STATES = [
+    {"entity_id": "switch.simuhome_kitchen_light", "state": "off", "attributes": {}},
+    {
+        "entity_id": "sensor.simuhome_kitchen_temperature",
+        "state": "27",
+        "attributes": {"device_class": "temperature"},
+    },
+    {
+        "entity_id": "select.midjd6_cn_911432173_6101_mode_p_2_2",
+        "state": "手动",
+        "attributes": {"options": ["手动", "智能"], "friendly_name": "冰箱 模式"},
+    },
+    {
+        "entity_id": "number.midjd6_cn_911432173_6101_target_temperature_p_3_2",
+        "state": "5",
+        "attributes": {
+            "device_class": "temperature",
+            "unit_of_measurement": "°C",
+            "min": 1,
+            "max": 9,
+            "step": 1,
+            "friendly_name": "冷藏室 设定温度",
+        },
+    },
+    {
+        "entity_id": "sensor.midjd6_cn_911432173_6101_temperature_p_3_1",
+        "state": "3",
+        "attributes": {
+            "device_class": "temperature",
+            "unit_of_measurement": "°C",
+            "friendly_name": "冷藏室 温度",
+        },
+    },
+]
+
 CONFIG_WITH_XIAOMI = {
     "claim": [
         {
@@ -157,19 +192,29 @@ def test_env_sensor_excludes_device_internal() -> None:
 
 
 def test_hide_empty_rooms() -> None:
-    """hide_empty=True 时，没有设备也没有环境量的区域不返回；默认关闭保持 v1 行为。"""
+    """hide_empty 只看"有没有内容"：米家规则没启用时它是空区域（隐藏）；启用后冰箱投影进来（显示）。"""
 
+    # 只认沙盒：米家区域没有任何被认领的实体 → 空区域，隐藏
+    sandbox_only = build_view(ENTITIES, DEVICES, AREAS, rules=default_rules(), hide_empty=True)
+    assert set(sandbox_only.areas) == {"kitchen"}, sandbox_only.areas
+
+    # 启用米家规则：冰箱被投影成设备 → 区域不再为空，显示；alias 同时生效
     rules = rules_from_config(CONFIG_WITH_XIAOMI)
-    hidden = build_view(ENTITIES, DEVICES, AREAS, rules=rules, hide_empty=True)
-    assert set(hidden.areas) == {"kitchen"}, hidden.areas
-
-    kept = build_view(ENTITIES, DEVICES, AREAS, rules=rules)
-    assert set(kept.areas) == {"kitchen", "xiaomi_home"}, kept.areas
-
-    aliased = build_view(
-        ENTITIES, DEVICES, AREAS, rules=rules, area_alias={"xiaomi_home": "home"}, hide_empty=False
+    with_xiaomi = build_view(
+        ENTITIES,
+        DEVICES,
+        AREAS,
+        rules=rules,
+        hide_empty=True,
+        states=STATES,
+        area_alias={"xiaomi_home": "home"},
     )
-    assert aliased.areas["xiaomi_home"] == "home"
+    assert set(with_xiaomi.areas) == {"kitchen", "xiaomi_home"}, with_xiaomi.areas
+    assert with_xiaomi.areas["xiaomi_home"] == "home"
+
+    # 默认不隐藏：两个区域都在（v1 行为）
+    kept = build_view(ENTITIES, DEVICES, AREAS, rules=rules, states=STATES)
+    assert set(kept.areas) == {"kitchen", "xiaomi_home"}, kept.areas
 
 
 def test_aliases_file(tmp_path: Path) -> None:
