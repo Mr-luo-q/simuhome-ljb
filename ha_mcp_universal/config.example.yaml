@@ -2,7 +2,7 @@
 ha:
   base_url: http://localhost:8123
   token: ${HA_TOKEN}            # HA 长期访问令牌
-  timeout_s: 10
+  timeout_s: 25                 # 云设备（米家）写入偶尔 >10 s，实测超时会被判成 HA_UNREACHABLE
 
 rooms:                          # room_id → HA 的 area_id；当前三个房间同名
   living_room: living_room
