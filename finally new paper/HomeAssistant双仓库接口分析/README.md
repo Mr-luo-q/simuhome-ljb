@@ -22,6 +22,21 @@
            15_MCP接入真实设备的映射扩展设计
                                     现状的三道硬编码闸门、三层改法（认领规则 / 设备角色 / 动作映射）、
                                     A/B/C 三个落地选项，用米家冰箱做试点验收
+           16_可接入HA的低价设备选型    按协议路线（BLE / WiFi / Zigbee / 蓝牙Mesh / Matter /
+                                     ESPHome / 华为）的 ≤150 元设备清单，含 HA 集成与
+                                     在我们 v2 MCP 里的动作/字段投影
+           17_Zigbee接入本机HA的可行性   本机实测（Docker Desktop 无 USB 直通 / 无协调器）、
+                                     五条可行路线（厂商网关 / 网络协调器 / Z2M on Windows /
+                                     usbipd+Docker / usbipd+WSL）与验收方式
+           18_电脑蓝牙接入本机HA的可行性 电脑内置蓝牙为何不能直接给 HA 用、三条路线
+                                     （ESP32 蓝牙代理 / Theengs Gateway / USB-IP）与
+                                     各自的"能读不能控"边界
+           19_Matter与ESP32接入本机HA   Matter 为何在本机"有集成但跑不动"（IPv6/NAT/官方
+                                     仅支持 HA OS）、ESP32 与笔记本的配合方式，以及
+                                     一块 ESP32 的三用（ESPHome/BLE 代理/Matter 试验）
+           20_树莓派部署HA的方案          HA OS vs HA Container 对比（Supervised/Core 已废弃）、
+                                      Pi 硬件配置清单、换 HA OS 后 17/18/19 号文档里的
+                                      限制如何消解，以及本项目两种搬法
 
 附录       06_MCP五层架构图.svg / .png     五模块与三层关系
            _架构探针\                      六项解耦实测报告（含可运行代码）
