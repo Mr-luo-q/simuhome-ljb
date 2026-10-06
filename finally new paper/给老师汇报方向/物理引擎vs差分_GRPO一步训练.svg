@@ -1,0 +1,283 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900" font-family="Microsoft YaHei, Segoe UI, Arial, sans-serif">
+  <!-- ===== 画布说明：16:9 一页 PPT =====
+       上半：两个条目对比。左=物理引擎一次推进 5s 级；右=差分一次推进 ms 级，
+             并给一个具体例子：30 分钟后邻接房间温度怎么变
+       中条：整段训练的总时长与内存需求，放在两个模块之外（仿真 1800 分钟 / 差分 300 分钟）
+       下半：强化学习 RLVR 以 GRPO 为例。模型写 Qwen 1.5B（不用 π/θ 符号）
+       配色：蓝=模型输出，绿=环境推进/差分，琥珀=环境打分，红=物理引擎代价 -->
+  <defs>
+    <marker id="arw-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#9aa7b5"/>
+    </marker>
+    <marker id="arw-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#c08a2e"/>
+    </marker>
+    <marker id="arw-fan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8fa8cd"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1600" height="900" fill="#ffffff"/>
+
+  <!-- ===== 标题 ===== -->
+  <text x="40" y="46" font-size="28" font-weight="700" fill="#1f2d3d">跨房间温湿度：物理引擎 vs 差分近似</text>
+  <text x="40" y="74" font-size="15" fill="#6b7a8d">同一个房间状态演化，两条路线算一次要花多少时间</text>
+
+  <!-- ===== 条目一：物理引擎（红） ===== -->
+  <rect x="40" y="92" width="740" height="198" rx="12" fill="#ffffff" stroke="#e8b4ad" stroke-width="2"/>
+  <rect x="40" y="92" width="740" height="50" rx="12" fill="#fdeceb"/>
+  <rect x="40" y="128" width="740" height="14" fill="#fdeceb"/>
+  <text x="68" y="128" font-size="22" font-weight="700" fill="#b03a2e">① 用物理引擎：要付出什么</text>
+  <text x="68" y="176" font-size="18" fill="#33404f">复杂计算：房间切网格 → 求解传热与流体</text>
+  <text x="68" y="206" font-size="18" fill="#33404f">打分耗时：每次推进都要跑一次仿真</text>
+  <text x="68" y="278" font-size="16" fill="#6b7a8d">一次推进</text>
+  <text x="170" y="282" font-size="32" font-weight="700" fill="#b03a2e">5s 级</text>
+
+  <!-- 条目一配图：房间被切成网格 -->
+  <rect x="628" y="156" width="112" height="76" rx="6" fill="#fdf1f0" stroke="#d98d84" stroke-width="2"/>
+  <line x1="650" y1="156" x2="650" y2="232" stroke="#e7b7b0"/>
+  <line x1="672" y1="156" x2="672" y2="232" stroke="#e7b7b0"/>
+  <line x1="694" y1="156" x2="694" y2="232" stroke="#e7b7b0"/>
+  <line x1="716" y1="156" x2="716" y2="232" stroke="#e7b7b0"/>
+  <line x1="628" y1="175" x2="740" y2="175" stroke="#e7b7b0"/>
+  <line x1="628" y1="194" x2="740" y2="194" stroke="#e7b7b0"/>
+  <line x1="628" y1="213" x2="740" y2="213" stroke="#e7b7b0"/>
+  <text x="684" y="258" font-size="13" text-anchor="middle" fill="#8a6b67">网格 + 求解器</text>
+
+  <!-- ===== 条目二：差分（绿，带 30 分钟邻接房间的例子） ===== -->
+  <rect x="820" y="92" width="740" height="198" rx="12" fill="#ffffff" stroke="#a9d6bb" stroke-width="2"/>
+  <rect x="820" y="92" width="740" height="50" rx="12" fill="#e9f6ee"/>
+  <rect x="820" y="128" width="740" height="14" fill="#e9f6ee"/>
+  <text x="848" y="128" font-size="22" font-weight="700" fill="#1c7a45">② 用差分计算：能得到什么</text>
+  <text x="848" y="172" font-size="18" fill="#33404f">简单差分：每个房间一个温度标量，沿连通边交换</text>
+  <text x="848" y="200" font-size="15" fill="#4f7a63">例：客厅开空调满风、厨房没设备，中间的门开着</text>
+
+  <!-- 例子结果：30 分钟后邻接房间温度 -->
+  <rect x="848" y="210" width="672" height="38" rx="8" fill="#f2faf5" stroke="#bfe3cd" stroke-width="1.5"/>
+  <text x="868" y="235" font-size="14" font-weight="700" fill="#1c7a45">30 分钟后：客厅 28.0 → 27.4℃　厨房 29.0 → 28.8℃<tspan font-weight="400" font-size="13" fill="#4f7a63">（空调 −1.8℃/h，门交换 ±0.5℃/h）</tspan></text>
+
+  <text x="848" y="278" font-size="16" fill="#6b7a8d">一次推进</text>
+  <text x="950" y="282" font-size="32" font-weight="700" fill="#1c7a45">ms 级</text>
+
+  <!-- ===== 整段训练的总时长与内存：放在两个模块之外 ===== -->
+  <rect x="40" y="300" width="1520" height="110" rx="10" fill="#f7f9fc" stroke="#d8e1ea" stroke-width="1.5"/>
+  <text x="68" y="326" font-size="14" fill="#8a97a6">一次训练步约 10 轮、每轮 4 条轨迹（约 80 次推进）；一次训练要跑几十个训练步</text>
+  <line x1="800" y1="340" x2="800" y2="396" stroke="#d8e1ea" stroke-width="1.5"/>
+  <text x="68" y="364" font-size="20" font-weight="700" fill="#b03a2e">仿真路线：训练 1800 分钟</text>
+  <text x="68" y="394" font-size="17" font-weight="700" fill="#8a2b21">显存：RTX 5090 32GB 装不下</text>
+  <text x="828" y="364" font-size="20" font-weight="700" fill="#1c7a45">差分路线：训练 300 分钟</text>
+  <text x="828" y="394" font-size="17" font-weight="700" fill="#166b3c">显存：RTX 5090 32GB 刚刚够用（实测峰值 28 GB，余量不足 4 GB）</text>
+
+  <!-- ===== 下半：强化学习 RLVR 以 GRPO 为例 ===== -->
+  <text x="40" y="448" font-size="28" font-weight="700" fill="#1f2d3d">强化学习 RLVR：以 GRPO 为例</text>
+  <text x="40" y="472" font-size="15" fill="#6b7a8d">每轮平行 rollout 4 条轨迹，比分数取最高分那条，从它后面继续分叉；中间轮次也要打分</text>
+
+  <!-- 图例：一条轨迹由 6 段组成 -->
+  <rect x="40" y="486" width="86" height="26" rx="5" fill="#e9f1fa" stroke="#a8c4e4"/>
+  <text x="83" y="503" font-size="12" text-anchor="middle" fill="#2c5c8f">模型输出①</text>
+  <line x1="130" y1="499" x2="140" y2="499" stroke="#9aa7b5" stroke-width="2" marker-end="url(#arw-gray)"/>
+  <rect x="142" y="486" width="86" height="26" rx="5" fill="#e6f5f2" stroke="#a4d6cd"/>
+  <text x="185" y="503" font-size="12" text-anchor="middle" fill="#217a6f">环境推进</text>
+  <line x1="232" y1="499" x2="242" y2="499" stroke="#9aa7b5" stroke-width="2" marker-end="url(#arw-gray)"/>
+  <rect x="244" y="486" width="86" height="26" rx="5" fill="#fff6e6" stroke="#e3bd7a"/>
+  <text x="287" y="503" font-size="12" text-anchor="middle" fill="#a5761c">过程分</text>
+  <line x1="334" y1="499" x2="344" y2="499" stroke="#9aa7b5" stroke-width="2" marker-end="url(#arw-gray)"/>
+  <rect x="346" y="486" width="86" height="26" rx="5" fill="#e9f1fa" stroke="#a8c4e4"/>
+  <text x="389" y="503" font-size="12" text-anchor="middle" fill="#2c5c8f">模型输出②</text>
+  <line x1="436" y1="499" x2="446" y2="499" stroke="#9aa7b5" stroke-width="2" marker-end="url(#arw-gray)"/>
+  <rect x="448" y="486" width="86" height="26" rx="5" fill="#e6f5f2" stroke="#a4d6cd"/>
+  <text x="491" y="503" font-size="12" text-anchor="middle" fill="#217a6f">环境推进</text>
+  <line x1="538" y1="499" x2="548" y2="499" stroke="#9aa7b5" stroke-width="2" marker-end="url(#arw-gray)"/>
+  <rect x="550" y="486" width="86" height="26" rx="5" fill="#fff6e6" stroke="#e3bd7a"/>
+  <text x="593" y="503" font-size="12" text-anchor="middle" fill="#a5761c">终局分</text>
+  <line x1="640" y1="499" x2="650" y2="499" stroke="#c08a2e" stroke-width="2" marker-end="url(#arw-amber)"/>
+  <rect x="652" y="486" width="86" height="26" rx="5" fill="#f0c060" stroke="#b8860b"/>
+  <text x="695" y="503" font-size="12" text-anchor="middle" fill="#5c4008">得分 rᵢ</text>
+  <text x="770" y="503" font-size="13" fill="#8a97a6">过程分在中间给、终局分在末尾给，二者合成这条轨迹的得分（图中分数为示例）</text>
+
+  <!-- 分组标注 -->
+  <line x1="40" y1="524" x2="200" y2="524" stroke="#5a7fb8" stroke-width="2"/>
+  <text x="120" y="518" font-size="16" font-weight="700" text-anchor="middle" fill="#3d5a99">Qwen 1.5B</text>
+  <line x1="240" y1="524" x2="840" y2="524" stroke="#5a7fb8" stroke-width="2"/>
+  <text x="540" y="518" font-size="16" font-weight="700" text-anchor="middle" fill="#3d5a99">第 1 轮：4 条轨迹</text>
+  <line x1="868" y1="524" x2="1060" y2="524" stroke="#c08a2e" stroke-width="2"/>
+  <text x="964" y="518" font-size="16" font-weight="700" text-anchor="middle" fill="#a5761c">选最高分那条</text>
+  <line x1="1080" y1="524" x2="1560" y2="524" stroke="#aab3bd" stroke-width="2"/>
+  <text x="1320" y="518" font-size="16" font-weight="700" text-anchor="middle" fill="#8a8f98">第 2 轮：从它后面再分叉 4 条（缩小示意）</text>
+
+  <!-- 左侧模型框 -->
+  <rect x="40" y="612" width="160" height="120" rx="12" fill="#eef2fb" stroke="#b3c5e6" stroke-width="2"/>
+  <text x="120" y="656" font-size="20" font-weight="700" text-anchor="middle" fill="#3d5a99">Qwen 1.5B</text>
+  <text x="120" y="686" font-size="13" text-anchor="middle" fill="#5b6b7d">一份参数</text>
+  <text x="120" y="710" font-size="13" text-anchor="middle" fill="#5b6b7d">分叉出 4 条</text>
+
+  <!-- 模型 → 4 条轨迹的扇出 -->
+  <line x1="200" y1="634" x2="236" y2="568" stroke="#8fa8cd" stroke-width="2" marker-end="url(#arw-fan)"/>
+  <line x1="200" y1="654" x2="236" y2="638" stroke="#8fa8cd" stroke-width="2" marker-end="url(#arw-fan)"/>
+  <line x1="200" y1="674" x2="236" y2="708" stroke="#8fa8cd" stroke-width="2" marker-end="url(#arw-fan)"/>
+  <line x1="200" y1="694" x2="236" y2="778" stroke="#8fa8cd" stroke-width="2" marker-end="url(#arw-fan)"/>
+
+  <!-- ===== 第 1 轮 轨迹 1 ===== -->
+  <rect x="240" y="538" width="600" height="60" rx="10" fill="#f7f9fc"/>
+  <rect x="246" y="556" width="54" height="24" rx="7" fill="#3b6ea5"/>
+  <text x="273" y="573" font-size="12" text-anchor="middle" fill="#ffffff">轨迹1</text>
+  <rect x="308" y="553" width="68" height="30" rx="6" fill="#e9f1fa" stroke="#a8c4e4"/>
+  <text x="342" y="572" font-size="11" text-anchor="middle" fill="#2c5c8f">模型①</text>
+  <rect x="380" y="553" width="68" height="30" rx="6" fill="#e6f5f2" stroke="#a4d6cd"/>
+  <text x="414" y="572" font-size="11" text-anchor="middle" fill="#217a6f">推进</text>
+  <rect x="452" y="553" width="68" height="30" rx="6" fill="#fff6e6" stroke="#e3bd7a"/>
+  <text x="486" y="572" font-size="11" text-anchor="middle" fill="#a5761c">过程分</text>
+  <rect x="524" y="553" width="68" height="30" rx="6" fill="#e9f1fa" stroke="#a8c4e4"/>
+  <text x="558" y="572" font-size="11" text-anchor="middle" fill="#2c5c8f">模型②</text>
+  <rect x="596" y="553" width="68" height="30" rx="6" fill="#e6f5f2" stroke="#a4d6cd"/>
+  <text x="630" y="572" font-size="11" text-anchor="middle" fill="#217a6f">推进</text>
+  <rect x="668" y="553" width="68" height="30" rx="6" fill="#fff6e6" stroke="#e3bd7a"/>
+  <text x="702" y="572" font-size="11" text-anchor="middle" fill="#a5761c">终局分</text>
+  <rect x="748" y="553" width="86" height="30" rx="6" fill="#fdf0d8" stroke="#e3bd7a"/>
+  <text x="791" y="573" font-size="13" text-anchor="middle" fill="#a5761c">r₁ = 0.4</text>
+  <line x1="834" y1="568" x2="850" y2="568" stroke="#c9b08a" stroke-width="2"/>
+
+  <!-- ===== 第 1 轮 轨迹 2（被选中） ===== -->
+  <rect x="240" y="608" width="600" height="60" rx="10" fill="#eaf1fb" stroke="#3b6ea5" stroke-width="2"/>
+  <rect x="246" y="626" width="54" height="24" rx="7" fill="#3b6ea5"/>
+  <text x="273" y="643" font-size="12" text-anchor="middle" fill="#ffffff">轨迹2</text>
+  <rect x="308" y="623" width="68" height="30" rx="6" fill="#e9f1fa" stroke="#a8c4e4"/>
+  <text x="342" y="642" font-size="11" text-anchor="middle" fill="#2c5c8f">模型①</text>
+  <rect x="380" y="623" width="68" height="30" rx="6" fill="#e6f5f2" stroke="#a4d6cd"/>
+  <text x="414" y="642" font-size="11" text-anchor="middle" fill="#217a6f">推进</text>
+  <rect x="452" y="623" width="68" height="30" rx="6" fill="#fff6e6" stroke="#e3bd7a"/>
+  <text x="486" y="642" font-size="11" text-anchor="middle" fill="#a5761c">过程分</text>
+  <rect x="524" y="623" width="68" height="30" rx="6" fill="#e9f1fa" stroke="#a8c4e4"/>
+  <text x="558" y="642" font-size="11" text-anchor="middle" fill="#2c5c8f">模型②</text>
+  <rect x="596" y="623" width="68" height="30" rx="6" fill="#e6f5f2" stroke="#a4d6cd"/>
+  <text x="630" y="642" font-size="11" text-anchor="middle" fill="#217a6f">推进</text>
+  <rect x="668" y="623" width="68" height="30" rx="6" fill="#fff6e6" stroke="#e3bd7a"/>
+  <text x="702" y="642" font-size="11" text-anchor="middle" fill="#a5761c">终局分</text>
+  <text x="791" y="620" font-size="11" font-weight="700" text-anchor="middle" fill="#8a5f12">最高分</text>
+  <rect x="748" y="623" width="86" height="30" rx="6" fill="#f0c060" stroke="#b8860b" stroke-width="2"/>
+  <text x="791" y="643" font-size="13" font-weight="700" text-anchor="middle" fill="#5c4008">r₂ = 0.9</text>
+  <line x1="834" y1="638" x2="864" y2="638" stroke="#c08a2e" stroke-width="3" marker-end="url(#arw-amber)"/>
+
+  <!-- ===== 第 1 轮 轨迹 3 ===== -->
+  <rect x="240" y="678" width="600" height="60" rx="10" fill="#f7f9fc"/>
+  <rect x="246" y="696" width="54" height="24" rx="7" fill="#8a6fa8"/>
+  <text x="273" y="713" font-size="12" text-anchor="middle" fill="#ffffff">轨迹3</text>
+  <rect x="308" y="693" width="68" height="30" rx="6" fill="#e9f1fa" stroke="#a8c4e4"/>
+  <text x="342" y="712" font-size="11" text-anchor="middle" fill="#2c5c8f">模型①</text>
+  <rect x="380" y="693" width="68" height="30" rx="6" fill="#e6f5f2" stroke="#a4d6cd"/>
+  <text x="414" y="712" font-size="11" text-anchor="middle" fill="#217a6f">推进</text>
+  <rect x="452" y="693" width="68" height="30" rx="6" fill="#fff6e6" stroke="#e3bd7a"/>
+  <text x="486" y="712" font-size="11" text-anchor="middle" fill="#a5761c">过程分</text>
+  <rect x="524" y="693" width="68" height="30" rx="6" fill="#e9f1fa" stroke="#a8c4e4"/>
+  <text x="558" y="712" font-size="11" text-anchor="middle" fill="#2c5c8f">模型②</text>
+  <rect x="596" y="693" width="68" height="30" rx="6" fill="#e6f5f2" stroke="#a4d6cd"/>
+  <text x="630" y="712" font-size="11" text-anchor="middle" fill="#217a6f">推进</text>
+  <rect x="668" y="693" width="68" height="30" rx="6" fill="#fff6e6" stroke="#e3bd7a"/>
+  <text x="702" y="712" font-size="11" text-anchor="middle" fill="#a5761c">终局分</text>
+  <rect x="748" y="693" width="86" height="30" rx="6" fill="#fdf0d8" stroke="#e3bd7a"/>
+  <text x="791" y="713" font-size="13" text-anchor="middle" fill="#a5761c">r₃ = 0.2</text>
+  <line x1="834" y1="708" x2="850" y2="708" stroke="#c9b08a" stroke-width="2"/>
+
+  <!-- ===== 第 1 轮 轨迹 4 ===== -->
+  <rect x="240" y="748" width="600" height="60" rx="10" fill="#f7f9fc"/>
+  <rect x="246" y="766" width="54" height="24" rx="7" fill="#b5793a"/>
+  <text x="273" y="783" font-size="12" text-anchor="middle" fill="#ffffff">轨迹4</text>
+  <rect x="308" y="763" width="68" height="30" rx="6" fill="#e9f1fa" stroke="#a8c4e4"/>
+  <text x="342" y="782" font-size="11" text-anchor="middle" fill="#2c5c8f">模型①</text>
+  <rect x="380" y="763" width="68" height="30" rx="6" fill="#e6f5f2" stroke="#a4d6cd"/>
+  <text x="414" y="782" font-size="11" text-anchor="middle" fill="#217a6f">推进</text>
+  <rect x="452" y="763" width="68" height="30" rx="6" fill="#fff6e6" stroke="#e3bd7a"/>
+  <text x="486" y="782" font-size="11" text-anchor="middle" fill="#a5761c">过程分</text>
+  <rect x="524" y="763" width="68" height="30" rx="6" fill="#e9f1fa" stroke="#a8c4e4"/>
+  <text x="558" y="782" font-size="11" text-anchor="middle" fill="#2c5c8f">模型②</text>
+  <rect x="596" y="763" width="68" height="30" rx="6" fill="#e6f5f2" stroke="#a4d6cd"/>
+  <text x="630" y="782" font-size="11" text-anchor="middle" fill="#217a6f">推进</text>
+  <rect x="668" y="763" width="68" height="30" rx="6" fill="#fff6e6" stroke="#e3bd7a"/>
+  <text x="702" y="782" font-size="11" text-anchor="middle" fill="#a5761c">终局分</text>
+  <rect x="748" y="763" width="86" height="30" rx="6" fill="#fdf0d8" stroke="#e3bd7a"/>
+  <text x="791" y="783" font-size="13" text-anchor="middle" fill="#a5761c">r₄ = 0.5</text>
+  <line x1="834" y1="778" x2="850" y2="778" stroke="#c9b08a" stroke-width="2"/>
+
+  <!-- 四条得分汇聚到选择节点 -->
+  <line x1="850" y1="568" x2="850" y2="778" stroke="#c9b08a" stroke-width="2"/>
+
+  <!-- ===== 决策框 ===== -->
+  <rect x="868" y="568" width="192" height="140" rx="12" fill="#fdf6e8" stroke="#e3bd7a" stroke-width="2"/>
+  <text x="964" y="606" font-size="15" font-weight="700" text-anchor="middle" fill="#33404f">4 个分数比大小</text>
+  <text x="964" y="634" font-size="15" font-weight="700" text-anchor="middle" fill="#8a5f12">取最高分那条</text>
+  <text x="964" y="666" font-size="13" text-anchor="middle" fill="#5b6b7d">更新 Qwen 1.5B 参数</text>
+  <text x="964" y="694" font-size="13" text-anchor="middle" fill="#5b6b7d">下一轮用新参数</text>
+
+  <!-- 从这条轨迹后面继续分叉 4 条 -->
+  <line x1="1060" y1="620" x2="1076" y2="566" stroke="#8fa8cd" stroke-width="2" marker-end="url(#arw-fan)"/>
+  <line x1="1060" y1="630" x2="1076" y2="614" stroke="#8fa8cd" stroke-width="2" marker-end="url(#arw-fan)"/>
+  <line x1="1060" y1="650" x2="1076" y2="662" stroke="#8fa8cd" stroke-width="2" marker-end="url(#arw-fan)"/>
+  <line x1="1060" y1="660" x2="1076" y2="710" stroke="#8fa8cd" stroke-width="2" marker-end="url(#arw-fan)"/>
+
+  <!-- ===== 第 2 轮 4 条小轨迹 ===== -->
+  <rect x="1080" y="547" width="480" height="38" rx="8" fill="#f7f9fc"/>
+  <rect x="1088" y="554" width="58" height="24" rx="4" fill="#e9f1fa" stroke="#a8c4e4"/>
+  <text x="1117" y="570" font-size="10" text-anchor="middle" fill="#2c5c8f">模型①</text>
+  <rect x="1150" y="554" width="58" height="24" rx="4" fill="#e6f5f2" stroke="#a4d6cd"/>
+  <text x="1179" y="570" font-size="10" text-anchor="middle" fill="#217a6f">推进</text>
+  <rect x="1212" y="554" width="58" height="24" rx="4" fill="#fff6e6" stroke="#e3bd7a"/>
+  <text x="1241" y="570" font-size="10" text-anchor="middle" fill="#a5761c">过程分</text>
+  <rect x="1274" y="554" width="58" height="24" rx="4" fill="#e9f1fa" stroke="#a8c4e4"/>
+  <text x="1303" y="570" font-size="10" text-anchor="middle" fill="#2c5c8f">模型②</text>
+  <rect x="1336" y="554" width="58" height="24" rx="4" fill="#e6f5f2" stroke="#a4d6cd"/>
+  <text x="1365" y="570" font-size="10" text-anchor="middle" fill="#217a6f">推进</text>
+  <rect x="1398" y="554" width="58" height="24" rx="4" fill="#fff6e6" stroke="#e3bd7a"/>
+  <text x="1427" y="570" font-size="10" text-anchor="middle" fill="#a5761c">终局分</text>
+  <rect x="1468" y="554" width="82" height="24" rx="5" fill="#fdf0d8" stroke="#e3bd7a"/>
+  <text x="1509" y="570" font-size="12" text-anchor="middle" fill="#a5761c">s₁</text>
+
+  <rect x="1080" y="595" width="480" height="38" rx="8" fill="#eef3f9"/>
+  <rect x="1088" y="602" width="58" height="24" rx="4" fill="#e9f1fa" stroke="#a8c4e4"/>
+  <text x="1117" y="618" font-size="10" text-anchor="middle" fill="#2c5c8f">模型①</text>
+  <rect x="1150" y="602" width="58" height="24" rx="4" fill="#e6f5f2" stroke="#a4d6cd"/>
+  <text x="1179" y="618" font-size="10" text-anchor="middle" fill="#217a6f">推进</text>
+  <rect x="1212" y="602" width="58" height="24" rx="4" fill="#fff6e6" stroke="#e3bd7a"/>
+  <text x="1241" y="618" font-size="10" text-anchor="middle" fill="#a5761c">过程分</text>
+  <rect x="1274" y="602" width="58" height="24" rx="4" fill="#e9f1fa" stroke="#a8c4e4"/>
+  <text x="1303" y="618" font-size="10" text-anchor="middle" fill="#2c5c8f">模型②</text>
+  <rect x="1336" y="602" width="58" height="24" rx="4" fill="#e6f5f2" stroke="#a4d6cd"/>
+  <text x="1365" y="618" font-size="10" text-anchor="middle" fill="#217a6f">推进</text>
+  <rect x="1398" y="602" width="58" height="24" rx="4" fill="#fff6e6" stroke="#e3bd7a"/>
+  <text x="1427" y="618" font-size="10" text-anchor="middle" fill="#a5761c">终局分</text>
+  <rect x="1468" y="602" width="82" height="24" rx="5" fill="#fdf0d8" stroke="#e3bd7a"/>
+  <text x="1509" y="618" font-size="12" text-anchor="middle" fill="#a5761c">s₂</text>
+
+  <rect x="1080" y="643" width="480" height="38" rx="8" fill="#f7f9fc"/>
+  <rect x="1088" y="650" width="58" height="24" rx="4" fill="#e9f1fa" stroke="#a8c4e4"/>
+  <text x="1117" y="666" font-size="10" text-anchor="middle" fill="#2c5c8f">模型①</text>
+  <rect x="1150" y="650" width="58" height="24" rx="4" fill="#e6f5f2" stroke="#a4d6cd"/>
+  <text x="1179" y="666" font-size="10" text-anchor="middle" fill="#217a6f">推进</text>
+  <rect x="1212" y="650" width="58" height="24" rx="4" fill="#fff6e6" stroke="#e3bd7a"/>
+  <text x="1241" y="666" font-size="10" text-anchor="middle" fill="#a5761c">过程分</text>
+  <rect x="1274" y="650" width="58" height="24" rx="4" fill="#e9f1fa" stroke="#a8c4e4"/>
+  <text x="1303" y="666" font-size="10" text-anchor="middle" fill="#2c5c8f">模型②</text>
+  <rect x="1336" y="650" width="58" height="24" rx="4" fill="#e6f5f2" stroke="#a4d6cd"/>
+  <text x="1365" y="666" font-size="10" text-anchor="middle" fill="#217a6f">推进</text>
+  <rect x="1398" y="650" width="58" height="24" rx="4" fill="#fff6e6" stroke="#e3bd7a"/>
+  <text x="1427" y="666" font-size="10" text-anchor="middle" fill="#a5761c">终局分</text>
+  <rect x="1468" y="650" width="82" height="24" rx="5" fill="#fdf0d8" stroke="#e3bd7a"/>
+  <text x="1509" y="666" font-size="12" text-anchor="middle" fill="#a5761c">s₃</text>
+
+  <rect x="1080" y="691" width="480" height="38" rx="8" fill="#eef3f9"/>
+  <rect x="1088" y="698" width="58" height="24" rx="4" fill="#e9f1fa" stroke="#a8c4e4"/>
+  <text x="1117" y="714" font-size="10" text-anchor="middle" fill="#2c5c8f">模型①</text>
+  <rect x="1150" y="698" width="58" height="24" rx="4" fill="#e6f5f2" stroke="#a4d6cd"/>
+  <text x="1179" y="714" font-size="10" text-anchor="middle" fill="#217a6f">推进</text>
+  <rect x="1212" y="698" width="58" height="24" rx="4" fill="#fff6e6" stroke="#e3bd7a"/>
+  <text x="1241" y="714" font-size="10" text-anchor="middle" fill="#a5761c">过程分</text>
+  <rect x="1274" y="698" width="58" height="24" rx="4" fill="#e9f1fa" stroke="#a8c4e4"/>
+  <text x="1303" y="714" font-size="10" text-anchor="middle" fill="#2c5c8f">模型②</text>
+  <rect x="1336" y="698" width="58" height="24" rx="4" fill="#e6f5f2" stroke="#a4d6cd"/>
+  <text x="1365" y="714" font-size="10" text-anchor="middle" fill="#217a6f">推进</text>
+  <rect x="1398" y="698" width="58" height="24" rx="4" fill="#fff6e6" stroke="#e3bd7a"/>
+  <text x="1427" y="714" font-size="10" text-anchor="middle" fill="#a5761c">终局分</text>
+  <rect x="1468" y="698" width="82" height="24" rx="5" fill="#fdf0d8" stroke="#e3bd7a"/>
+  <text x="1509" y="714" font-size="12" text-anchor="middle" fill="#a5761c">s₄</text>
+
+  <text x="40" y="845" font-size="14" fill="#8a97a6">每轮末尾的分数既是奖励，也是下一轮从哪条继续往外走的依据；一个训练步约 10 轮，第 3 轮起画法相同（图中略）</text>
+</svg>

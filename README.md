@@ -47,8 +47,6 @@ source.md                                     自动生成的目录与来源登�
 finally new paper\HomeAssistant双仓库接口分析\  01~06、08~14 号文档（无 07）
                                               11 最终设计（实现以它为准）、12 统一粒度、
                                               13 实现现状与计划、14 接口交接（RL demo 用）
-finally new paper\任务类型分析\                 任务合不合法的三种处理方式：SimuHome 的 F/IF 划分、
-                                              SMH-Bench 的澄清 vs 执行、HomeFlow 的生成期过滤
 finally new paper\外界大模型与HA交互方式调研\    外界模型控制 HA 的六条路线盘点：官方 MCP / 社区 MCP /
                                               HA 内置对话代理 / 反向 MCP / 直接 REST / 传统通道
 finally new paper\UbiComp三支柱讨论\12_投稿策略-把三个支柱的故事讲圆.md
