@@ -29,7 +29,11 @@ M2  已完成（2026-09-27）  角色推断 + 多值拆分 + 六字段聚合 + �
               observe_home 房间 4 个：沙盒 3 个 + 米家区域（别名 home，里面是冰箱两台逻辑设备）
     口径    v2 起"本家庭"= 被 claim 规则认领的实体；端到端里 query_events 的断言已按此放宽
 M3  下一步                命名泛化（若采用方案 B）+ 第三方集成抽样 + 文档收尾
-M4                        回归与验收记录（含冰箱的读写回放）
+M4（时间/记忆）  已完成（2026-10-07）  memory + time_control + scheduler 实现；
+                         执行内核抽出 execution.py（execute_action 与预约到点共用）；
+                         离线 35 项全过，真机 8 工具 22/22，预约到点执行与取消实机验证通过；
+                         DeepSeek 通过 stdio 实测 8/8；
+                         tools.expose 开放 8 条（check_goal / query_events 保留隐藏）
 
 ## 演示：大模型直连 MCP 控制冰箱（2026-09-27，已完成）
 

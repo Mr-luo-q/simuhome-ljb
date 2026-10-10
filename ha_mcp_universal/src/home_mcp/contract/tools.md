@@ -42,14 +42,14 @@ observe_home    全屋快照（房间 + 环境量 + 时间）
 inspect_room    单房间（设备清单 + 环境量 + doors 恒为 null）
 inspect_device  单设备（状态 + 可用动作与参数范围）
 execute_action  执行动作并回读
-time_control    advance / schedule / list / cancel
+time_control    schedule / list（只列未执行的单）/ cancel
 check_goal      条件判定
 query_events    事件查询
 memory          长期记忆读写
 ```
 
-注意：`NOT_IMPLEMENTED` 写进了每个工具的错误列表，它是分期实现的产物
-（M3 之后只剩 `time_control` 与 `memory` 会返回它），M4 完成后会从契约里删掉。
+注意：`NOT_IMPLEMENTED` 是分期实现的产物；`time_control` / `memory` 已实现，
+不再返回它，其余工具列表里暂时保留，收口时清理。
 
 ## 规范动作表（ACTIONS_BY_KIND）
 

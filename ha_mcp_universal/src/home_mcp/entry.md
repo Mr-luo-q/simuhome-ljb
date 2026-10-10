@@ -18,8 +18,10 @@
 
 ```text
 BACKENDS 表    {"ha": "home_mcp.backend_ha"}，动态导入；静态扫描看不到这条依赖
-装配顺序       配置 → 后端 load(config) → server.build_registry()（契约校验）→ build_server()
+装配顺序       配置 → 后端 load(config) → tools.expose 白名单 → build_registry()（契约校验）
+              → build_server()
 契约失败       后端少实现工具时 build_registry 抛 MissingToolsError，进程以码 2 退出
+开放范围       config 的 tools.expose 决定模型能看到哪些工具；留空 = 契约里的全部
 传送方式       本阶段只支持 stdio；配置写 http 会直接报错退出
 ```
 

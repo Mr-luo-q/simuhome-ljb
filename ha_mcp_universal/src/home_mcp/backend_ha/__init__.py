@@ -5,14 +5,18 @@
 
 from __future__ import annotations
 
+import atexit
 import logging
 from dataclasses import dataclass
 from functools import partial
 from typing import Any, Callable
 
+from ..errors import HomeMcpError
 from ..registry import ensure_aliases_file, load_aliases, rules_from_config
 from ..runtime import ha_client_options, resolve_path
+from ..scheduler import ScheduleStore, Scheduler
 from .client import HaRestClient, HaWsClient, build_clients
+from .execution import perform_action
 from .mapping import RegistryView, build_view
 from .tools import MODULES
 
@@ -27,6 +31,8 @@ class HaContext:
     client: HaRestClient
     view: RegistryView
     config: dict[str, Any]
+    store: Any = None
+    scheduler: Any = None
 
 
 def load(config: dict[str, Any]) -> dict[str, Callable[[dict[str, Any]], dict[str, Any]]]:
@@ -75,4 +81,34 @@ def load(config: dict[str, Any]) -> dict[str, Callable[[dict[str, Any]], dict[st
         LOG.info("待投影（M2 角色映射）：%s", [item.entity_id for item in pending[:8]])
 
     context = HaContext(client=rest, view=view, config=config)
+    time_cfg = config.get("time") or {}
+    store = ScheduleStore(
+        resolve_path(config, str(time_cfg.get("db") or "./data/schedules.db"))
+    )
+
+    def _execute_schedule(row: dict[str, Any]) -> tuple[str, list[dict[str, Any]], str | None]:
+        """到点执行预约单：逐步调用执行内核；某步失败后继续剩余步骤（T2）。"""
+
+        results: list[dict[str, Any]] = []
+        all_ok = True
+        last_error: str | None = None
+        for step in row["steps"]:
+            device_id = str(step.get("device_id"))
+            action = str(step.get("action"))
+            try:
+                result = perform_action(context, device_id, action, step.get("params"))
+                results.append({"device_id": device_id, "action": action, "ok": True, "result": result})
+            except HomeMcpError as exc:
+                all_ok = False
+                last_error = exc.code.value
+                results.append(
+                    {"device_id": device_id, "action": action, "ok": False, "error": exc.code.value}
+                )
+        return ("completed" if all_ok else "failed", results, last_error)
+
+    scheduler = Scheduler(store, _execute_schedule)
+    scheduler.start()
+    atexit.register(scheduler.stop)
+    context.store = store
+    context.scheduler = scheduler
     return {name: partial(module.run, context) for name, module in MODULES.items()}

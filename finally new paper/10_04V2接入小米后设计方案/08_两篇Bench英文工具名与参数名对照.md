@@ -131,7 +131,7 @@ create_automation      conditions.time_cron    Quartz 七字段 cron，无则 nu
 | 房间/标签过滤 | `room`、`tags` | `room_id`（房间）；设备通过房间列表取 |
 | 规则触发 | `conditions.time_cron`、`conditions.state_expr` | 规划中的 `trigger`/`conditions`（07 号文档） |
 | 规则动作 | `actions`（同 control_device 格式） | `actions`（同 execute_action 格式） |
-| 返回外壳 | `{mode, response, actions/automations}` | `{ok, data, error, meta}` + 工具各自的 data |
+| 返回外壳 | `{mode, response, actions/automations}` | `{ok, data, error}` + 工具各自的 data（meta 在服务端内部） |
 
 ```text
 一对一能对上的    did↔device_id、locator↔action+服务映射、arguments↔params
@@ -139,6 +139,44 @@ create_automation      conditions.time_cron    Quartz 七字段 cron，无则 nu
                   我们拆成 inspect_room / inspect_device，模式更显式但工具数更多
 规则接口          SMH-Bench 的 conditions.time_cron/state_expr 可以直接作为
                   我们 manage_rule 的触发字段命名参考（见 07 号文档）
+```
+
+### 4.1 三个工具不等于简单：复杂度藏在参数空间和环境 schema
+
+```text
+query_device 不是"一个观察接口"
+  它有四种模式 brief / spec / status / spec_status：
+  找候选设备、查能力与参数范围、查当前状态、两者一起查；
+  还要配合 did / room / tags 过滤，等于把设备发现、能力查询、状态查询都塞进一个工具
+
+control_device 不是"一个执行接口"
+  它是通用服务调用：locator 可以是任意 service 或 component.service，
+  arguments 按该设备服务的 schema 填（类型、范围、枚举都要匹配）；
+  设备空间有多大，动作空间就有多大——不是只有开关灯这几件事
+
+create_automation 不是"一个规则接口"那么简单
+  它把 control_device 的动作格式原样复用，再加 time_cron / state_expr 两类触发；
+  触发器、动作、参数范围都要对齐环境状态
+
+真正的复杂度在环境 schema
+  每个设备的属性 {name, type, range/options, value} 与服务
+  {name, arguments, code} 都要 agent 先查（spec）再填（locator/arguments）；
+  code 是状态转移规则，决定动作的合法效果
+
+评测复杂度在任务分类与验证器
+  TC1~TC7（原子/组合/歧义/自动化/多轮/记忆/查询）+ HomeEnv 回放验证；
+  工具数量少，但每个任务类都在考不同的能力
+```
+
+```text
+和我们 8 工具的取舍对比
+  SMH-Bench   3 个通用工具 + 提示注入（记忆/对话历史）+ 环境验证器
+              工具选择简单；参数空间大、必须先查手册，适合评测"会不会接地"
+  我们 MCP    8 个语义工具（观察拆成 home/room/device，执行收敛成 8 个规范动作，
+              另有 goal/events/memory/time）
+              工具选择更多；每个工具语义固定、参数空间小，适合小模型学习
+  两边不是谁更先进，是把复杂度放在不同层：一个放在参数与环境，
+  一个放在工具与动作词表
 ```
 
 ## 5. 命名规范小结（给接口设计用）

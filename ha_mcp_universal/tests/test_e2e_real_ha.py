@@ -1,4 +1,6 @@
-"""端到端脚本：起 stdio 服务，对真 HA 跑 M1~M3 的二十一项验收。
+"""端到端脚本：起 stdio 服务，对真 HA 跑五工具对齐后的验收。
+
+tools.expose 白名单决定本轮开放哪些工具；白名单外的检查自动跳过。
 
 手动运行，需要 HA 在跑、config.yaml 与 HA_TOKEN 就绪：
     python tests\\test_e2e_real_ha.py --config config.yaml
@@ -64,7 +66,20 @@ async def run_check(config_path: Path) -> int:
             # ── M1：工具清单与全屋快照 ─────────────────────────
             tools = await session.list_tools()
             names = [tool.name for tool in tools.tools]
-            record("tools/list 返回 8 个工具", len(names) == 8, str(names))
+            record(
+                "tools/list 暴露 8 个工具，顺序为原 5 + inspect_time + time_control + memory",
+                names == [
+                    "observe_home",
+                    "inspect_room",
+                    "inspect_device",
+                    "execute_action",
+                    "finish",
+                    "inspect_time",
+                    "time_control",
+                    "memory",
+                ],
+                str(names),
+            )
 
             home = call_payload(await session.call_tool("observe_home", {}))
             rooms = (home.get("data") or {}).get("rooms", {})
@@ -76,12 +91,70 @@ async def run_check(config_path: Path) -> int:
                 f"rooms={len(rooms)} metrics={metrics} time={(home.get('data') or {}).get('time')}",
             )
 
-            stub = call_payload(await session.call_tool("memory", {"op": "read", "key": "probe"}))
-            record(
-                "未实现工具返回 NOT_IMPLEMENTED",
-                (stub.get("error") or {}).get("code") == "NOT_IMPLEMENTED",
-                str(stub.get("error")),
-            )
+            if "inspect_time" in names:
+                clock_reply = call_payload(await session.call_tool("inspect_time", {}))
+                clock_data = clock_reply.get("data") or {}
+                record(
+                    "inspect_time：返回 {now, clock} 且不含 meta，now 为 YYYY-MM-DD HH:MM",
+                    bool(clock_reply.get("ok"))
+                    and "meta" not in clock_reply
+                    and isinstance(clock_data.get("now"), str)
+                    and len(clock_data.get("now", "")) == 16
+                    and clock_data.get("clock") == "real",
+                    str(clock_data),
+                )
+
+            if "memory" in names:
+                memory_read = call_payload(await session.call_tool("memory", {"op": "read"}))
+                memory_bad = call_payload(
+                    await session.call_tool("memory", {"op": "write", "text": ""})
+                )
+                record(
+                    "memory：read 返回 {text}；空文本 write → BAD_REQUEST",
+                    bool(memory_read.get("ok"))
+                    and "text" in (memory_read.get("data") or {})
+                    and (memory_bad.get("error") or {}).get("code") == "BAD_REQUEST",
+                    f"read={sorted((memory_read.get('data') or {}).keys())} "
+                    f"bad={(memory_bad.get('error') or {}).get('code')}",
+                )
+
+            if "time_control" in names:
+                at = (
+                    dt.datetime.now().astimezone() + dt.timedelta(minutes=2)
+                ).strftime("%Y-%m-%d %H:%M")
+                created = call_payload(
+                    await session.call_tool(
+                        "time_control",
+                        {
+                            "op": "schedule",
+                            "at": at,
+                            "steps": [{"device_id": "living_room_tv", "action": "turn_on"}],
+                        },
+                    )
+                )
+                schedule_id = (created.get("data") or {}).get("schedule_id")
+                before = call_payload(await session.call_tool("time_control", {"op": "list"}))
+                cancelled = call_payload(
+                    await session.call_tool(
+                        "time_control", {"op": "cancel", "schedule_id": schedule_id}
+                    )
+                )
+                listed = call_payload(await session.call_tool("time_control", {"op": "list"}))
+                record(
+                    "time_control：建单（list 可见）→ 取消 → list 不再显示",
+                    bool(created.get("ok"))
+                    and (created.get("data") or {}).get("status") == "pending"
+                    and (cancelled.get("data") or {}).get("status") == "cancelled"
+                    and any(
+                        item == {"schedule_id": schedule_id, "at": at}
+                        for item in (before.get("data") or {}).get("items", [])
+                    )
+                    and all(
+                        item.get("schedule_id") != schedule_id
+                        for item in (listed.get("data") or {}).get("items", [])
+                    ),
+                    f"created={created.get('data')} cancel={cancelled.get('data')}",
+                )
 
             unknown = call_payload(await session.call_tool("no_such_tool", {}))
             record(
@@ -90,16 +163,47 @@ async def run_check(config_path: Path) -> int:
                 str(unknown.get("error")),
             )
 
+            finish_ok = call_payload(
+                await session.call_tool("finish", {"outcome": "completed", "summary": "live smoke"})
+            )
+            finish_refused = call_payload(
+                await session.call_tool(
+                    "finish", {"outcome": "refused", "reason_code": "OUT_OF_SAFE_RANGE"}
+                )
+            )
+            finish_bad = call_payload(
+                await session.call_tool(
+                    "finish", {"outcome": "completed", "reason_code": "OUT_OF_SAFE_RANGE"}
+                )
+            )
+            record(
+                "finish：completed / refused 合法，completed 带 reason_code → BAD_REQUEST",
+                bool(finish_ok.get("ok"))
+                and (finish_ok.get("data") or {}).get("accepted") is True
+                and bool(finish_refused.get("ok"))
+                and (finish_bad.get("error") or {}).get("code") == "BAD_REQUEST",
+                f"ok={finish_ok.get('data')} bad={(finish_bad.get('error') or {}).get('code')}",
+            )
+
             # ── M2：只读三件套 ────────────────────────────────
             room = call_payload(await session.call_tool("inspect_room", {"room_id": "living_room"}))
             room_data = room.get("data") or {}
+            room_devices = room_data.get("devices") or []
+            first_device = room_devices[0] if room_devices else {}
             record(
-                "inspect_room(living_room)：5 台设备 + 4 环境量 + doors=null",
+                "inspect_room(living_room)：5 台设备摘要 + 4 环境量 + doors=null",
                 bool(room.get("ok"))
-                and len(room_data.get("devices") or []) == 5
+                and len(room_devices) == 5
                 and len(room_data.get("env") or {}) == 4
                 and room_data.get("doors") is None,
-                f"devices={len(room_data.get('devices') or [])} env={room_data.get('env')}",
+                f"devices={len(room_devices)} first={first_device} env={room_data.get('env')}",
+            )
+            record(
+                "inspect_room 的设备摘要有 4 个对齐字段",
+                isinstance(first_device, dict)
+                and set(first_device) == {"device_id", "display_name", "kind", "device_type"}
+                and bool(first_device.get("display_name")),
+                str(first_device),
             )
 
             bad_room = call_payload(await session.call_tool("inspect_room", {"room_id": "garage"}))
@@ -149,34 +253,46 @@ async def run_check(config_path: Path) -> int:
                 str(bad_device.get("error")),
             )
 
-            events = call_payload(await session.call_tool("query_events", {"since": hours_ago(8), "limit": 50}))
-            event_items = (events.get("data") or {}).get("events", [])
-            # v2 起认领的实体不止 simuhome：只要不是虚拟时间、且都在"被认领的实体"里就算过
-            record(
-                "query_events(近 8 小时)：非空、无虚拟时间、无外部集成噪声",
-                bool(events.get("ok"))
-                and len(event_items) > 0
-                and all("virtual_time" not in (item.get("entity_id") or "") for item in event_items)
-                and all(
-                    (item.get("entity_id") or "").startswith(HOME_PREFIXES)
-                    or "midjd6" in (item.get("entity_id") or "")     # 已认领的米家冰箱实体
-                    for item in event_items
-                ),
-                f"matched={(events.get('data') or {}).get('counts', {}).get('matched')} "
-                f"returned={len(event_items)}",
-            )
-
-            clock = call_payload(
+            if "query_events" in names:
+                # 先生成一次真实状态变化，避免家里闲置时 logbook 里没有本家庭事件
                 await session.call_tool(
-                    "query_events",
-                    {"since": hours_ago(0.2), "entity_id": "sensor.simuhome_virtual_time", "limit": 5},
+                    "execute_action",
+                    {"device_id": "living_room_side_light", "action": "toggle", "params": {}},
                 )
-            )
-            record(
-                "query_events 显式指定虚拟时间 → 不排除、有数据",
-                bool(clock.get("ok")) and len((clock.get("data") or {}).get("events", [])) > 0,
-                f"returned={len((clock.get('data') or {}).get('events', []))}",
-            )
+                await session.call_tool(
+                    "execute_action",
+                    {"device_id": "living_room_side_light", "action": "toggle", "params": {}},
+                )
+                events = call_payload(
+                    await session.call_tool("query_events", {"since": hours_ago(8), "limit": 50})
+                )
+                event_items = (events.get("data") or {}).get("events", [])
+                # v2 起认领的实体不止 simuhome：只要不是虚拟时间、且都在"被认领的实体"里就算过
+                record(
+                    "query_events(近 8 小时)：非空、无虚拟时间、无外部集成噪声",
+                    bool(events.get("ok"))
+                    and len(event_items) > 0
+                    and all("virtual_time" not in (item.get("entity_id") or "") for item in event_items)
+                    and all(
+                        (item.get("entity_id") or "").startswith(HOME_PREFIXES)
+                        or "midjd6" in (item.get("entity_id") or "")     # 已认领的米家冰箱实体
+                        for item in event_items
+                    ),
+                    f"matched={(events.get('data') or {}).get('counts', {}).get('matched')} "
+                    f"returned={len(event_items)}",
+                )
+
+                clock = call_payload(
+                    await session.call_tool(
+                        "query_events",
+                        {"since": hours_ago(0.2), "entity_id": "sensor.simuhome_virtual_time", "limit": 5},
+                    )
+                )
+                record(
+                    "query_events 显式指定虚拟时间 → 不排除、有数据",
+                    bool(clock.get("ok")) and len((clock.get("data") or {}).get("events", [])) > 0,
+                    f"returned={len((clock.get('data') or {}).get('events', []))}",
+                )
 
             # ── M3：写路径（快照 → 写 → 回读 → 还原）──────────────
             async def device_state(device_id: str) -> dict[str, Any]:
@@ -202,10 +318,20 @@ async def run_check(config_path: Path) -> int:
 
             try:
                 opened = await act("living_room_side_light", "turn_on")
+                opened_data = opened.get("data") or {}
                 record(
-                    "execute_action(灯 turn_on)：回读 on=True",
-                    bool(opened.get("ok")) and (opened.get("data") or {}).get("state_after", {}).get("on") is True,
-                    json.dumps((opened.get("data") or {}).get("state_after"), ensure_ascii=False),
+                    "execute_action(灯 turn_on)：回读 on=True + state_diff/changed",
+                    bool(opened.get("ok"))
+                    and opened_data.get("state_after", {}).get("on") is True
+                    and opened_data.get("changed") is True
+                    and "on" in (opened_data.get("state_diff") or {}),
+                    json.dumps(
+                        {
+                            "state_after": opened_data.get("state_after"),
+                            "state_diff": opened_data.get("state_diff"),
+                        },
+                        ensure_ascii=False,
+                    ),
                 )
 
                 mode = await act("living_room_ac", "set_mode", {"mode": "cool"})
@@ -250,25 +376,26 @@ async def run_check(config_path: Path) -> int:
                     str(wrong.get("error")),
                 )
 
-                goal = call_payload(
-                    await session.call_tool(
-                        "check_goal",
-                        {
-                            "conditions": [
-                                {"target": "living_room.temperature", "op": "lt", "value": 24}
-                            ],
-                            "keep": [{"target": "kitchen.pm10", "op": "lt", "value": 100}],
-                        },
+                if "check_goal" in names:
+                    goal = call_payload(
+                        await session.call_tool(
+                            "check_goal",
+                            {
+                                "conditions": [
+                                    {"target": "living_room.temperature", "op": "lt", "value": 24}
+                                ],
+                                "keep": [{"target": "kitchen.pm10", "op": "lt", "value": 100}],
+                            },
+                        )
                     )
-                )
-                goals = (goal.get("data") or {}).get("goals") or []
-                keeps = (goal.get("data") or {}).get("keep") or []
-                record(
-                    "check_goal：目标不成立 + 保持条件成立",
-                    bool(goals) and goals[0].get("pass") is False
-                    and bool(keeps) and keeps[0].get("pass") is True,
-                    f"goals={json.dumps(goals, ensure_ascii=False)[:120]}",
-                )
+                    goals = (goal.get("data") or {}).get("goals") or []
+                    keeps = (goal.get("data") or {}).get("keep") or []
+                    record(
+                        "check_goal：目标不成立 + 保持条件成立",
+                        bool(goals) and goals[0].get("pass") is False
+                        and bool(keeps) and keeps[0].get("pass") is True,
+                        f"goals={json.dumps(goals, ensure_ascii=False)[:120]}",
+                    )
             finally:
                 # 还原：把三台设备写回快照（失败也执行）
                 for device_id, state in snapshot.items():

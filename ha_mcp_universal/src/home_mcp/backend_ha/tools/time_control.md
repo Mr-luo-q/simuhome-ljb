@@ -1,15 +1,23 @@
 # `time_control.py` 说明
 
 ```text
-状态   M4 实现，当前返回 NOT_IMPLEMENTED
-职责   四个 op：advance（等到某时刻/条件）、schedule（预约动作）、list、cancel
-输入   {op, seconds?, at?, steps?}
-输出   快照 或 {schedule_id}
-读取   /api/states（轮询条件）；runtime 的 schedules 表
-写入   runtime 的 schedules 表
-不负责 不替模型决定该预约什么；不做自动编排
+状态   已实现（2026-10-07）：三个 op，无 advance、无相对时间
+职责   一次性预约：schedule 写单 / list 查单 / cancel 撕单
+输入   {op, at?, steps?, schedule_id?}
+       op           schedule | list | cancel
+       at           schedule 用："YYYY-MM-DD HH:MM"（家庭时区）
+       steps        schedule 用：1~8 条 ACTION_CALL（与 execute_action 入参同构）
+       schedule_id  cancel 用
+输出   schedule → {schedule_id, at, status: pending}
+       list     → {now, items:[{schedule_id, at}]}   只列还没执行的单
+       cancel   → {schedule_id, status: cancelled}   取消后该单从 list 消失
+读取   /api/states（建单时校验 steps）；schedules 表（list/cancel）
+写入   schedules 表；到点由 Scheduler 调执行内核
+不负责 不定义第二套动作语义；不做 advance / 快进 / 持久规则
+错误   INVALID_TIME / BAD_REQUEST / UNKNOWN_DEVICE / UNSUPPORTED_ACTION
 对应   src\home_mcp\backend_ha\tools\time_control.py
 ```
 
-时间语义：HA 侧 `advance` 就是真实等待（实测虚拟时钟 1:1 真实时间，无法快进），
-单项超时上限 30 s，超时返回 VERIFY_TIMEOUT（不算失败）。
+时间规则：`at` 分钟级，落到整分执行；验收窗口前后各 30 秒；
+内部状态五态（pending / running / completed / failed / cancelled）只留在库里；
+模型侧不按状态列单：list 只列未执行的单，状态词只出现在 schedule / cancel 的确认里。

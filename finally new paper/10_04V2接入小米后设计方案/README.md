@@ -27,6 +27,32 @@
                  SMH-Bench / HomeFlow 的英文原文工具名与参数名对照：
                  query_device/control_device/create_automation 的字段、输出 schema、
                  设备 API 形态，以及与我们 MCP 参数名的映射
+09_一次性调度与持久化调度-两个通用语义接口.md
+                 按生命周期拆分时间语义：time_control（一次性预约单：写/查/取消）与
+                 manage_rule（持久化调度 / 规则）两个通用接口；含判据、schema、
+                 成对例子（今晚/每晚）、HA 与沙盒映射、评测口径、与三篇 bench 的差异声明
+14_记忆与时间调度接口详细设计.md
+                 memory（read/write 整段文本，M1~M5 已定稿：空文本拒绝、
+                 超长截断、整段替换、只回 code、两个错误码）+ time_control
+                 （预约 = 延迟执行 execute_action）：共享 ACTION_CALL、时间窗口、
+                 预约单结构、调度器与存储、完整示例；时间侧 T1~T5 已定
+                 （失败继续剩余步骤、list 只列未执行的单、线程+堆等，
+                 2026-10-09 修订 list 语义）；
+                 inspect_time 已实现并开放（读当前时间，inspect_* 家族，共 8 条开放）；
+                 原则是"对内丰富、对外简单"，模型只看到最小字段
+15_目前方案与交付接口.md
+                 面向 RL / 数据合成 / 训练的交付口径：当前开放 8 个工具
+                 （原 5 + inspect_time + time_control + memory）、check_goal / query_events
+                 保留隐藏、ACTION_CALL 复用、tools.expose 白名单、运行与验收命令、
+                 已知边界，取代双仓库文件夹的 v1 交接稿 14
+16_四个Bench任务类型梳理.md
+                 按任务类型列清四篇 bench 的 T 数与实例量：
+                 HomeBench 5 类 / SimuHome QT1~QT4（6 类型 12 条件）/
+                 SMH-Bench TC1~TC7（22 子类）/ PersonalHomeBench IG/CF/MC/FR/PG
+
+辅助调研文档/
+                 09_国内可买到Matter小型设备调研.md、10_美的设备HA接入方案调研.md
+                 （选购与品牌接入的辅助材料，不参与主设计口径）
 
 与其他文档的关系
   11/12/13/14/15 号（双仓库文件夹）          上游设计与论文口径

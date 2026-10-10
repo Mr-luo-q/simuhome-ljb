@@ -29,6 +29,7 @@ from home_mcp.backend_ha.mapping import (                              # noqa: E
 from home_mcp.backend_ha.tools import (                                # noqa: E402
     check_goal,
     execute_action,
+    finish,
     inspect_device,
     inspect_room,
     observe_home,
@@ -51,9 +52,9 @@ class FixtureContext:
 
 
 def test_contract_shape() -> None:
-    """契约里应有 8 个工具，名字唯一，schema 是 object，错误码都在 errors 里定义。"""
+    """契约里应有 10 个工具（8 家庭 + finish + inspect_time），名字唯一，schema 是 object。"""
 
-    assert len(TOOLS) == 8, f"工具数应为 8，实际 {len(TOOLS)}"
+    assert len(TOOLS) == 10, f"工具数应为 10，实际 {len(TOOLS)}"
     names = [spec.name for spec in TOOLS]
     assert len(set(names)) == len(names), "工具名不能重复"
     known_codes = {code.value for code in ErrorCode}
@@ -95,6 +96,21 @@ def test_registry_enforces_contract() -> None:
         raise AssertionError("多出未定义工具时应当报错")
 
 
+def test_registry_expose_filter() -> None:
+    """tools.expose 白名单：只注册列出的工具，未定义的名字启动期报错。"""
+
+    full = {spec.name: (lambda arguments: {"ok": True}) for spec in TOOLS}
+    exposed = shell.build_registry(full, expose=["finish", "observe_home"])
+    assert list(exposed) == ["finish", "observe_home"], list(exposed)
+
+    try:
+        shell.build_registry(full, expose=["no_such_tool"])
+    except MissingToolsError as err:
+        assert "no_such_tool" in str(err)
+    else:
+        raise AssertionError("白名单里的未定义工具应当报错")
+
+
 def test_call_tool_envelope() -> None:
     """未定义工具返回 BAD_REQUEST；业务异常转成对应错误码；成功时带 meta。"""
 
@@ -123,19 +139,12 @@ def test_call_tool_envelope() -> None:
     assert set(ok["meta"]) == {"elapsed_ms", "clock"}
 
 
-def test_stubs_are_not_implemented() -> None:
-    """M3 之后仍未实现的两个工具（time_control / memory）必须返回 NOT_IMPLEMENTED。"""
+def test_backend_modules_cover_contract() -> None:
+    """后端模块表与契约一一对应（memory / time_control 都已实现）。"""
 
     from home_mcp.backend_ha.tools import MODULES
 
-    pending = ("time_control", "memory")
-    for name in pending:
-        try:
-            MODULES[name].run(None, {})
-        except HomeMcpError as err:
-            assert err.code is ErrorCode.NOT_IMPLEMENTED, f"{name} 抛了 {err.code}"
-        else:
-            raise AssertionError(f"{name} 应当返回 NOT_IMPLEMENTED")
+    assert set(MODULES) == {spec.name for spec in TOOLS}
 
 
 def test_mapping_rules() -> None:
@@ -171,12 +180,15 @@ def test_observe_home_on_fixture() -> None:
 
 
 def test_inspect_room_on_fixture() -> None:
-    """inspect_room 给环境量 + 设备清单 + doors=null；房间不存在报 UNKNOWN_ROOM。"""
+    """inspect_room 给环境量 + 设备摘要 + doors=null；房间不存在报 UNKNOWN_ROOM。"""
 
     context = FixtureContext()
     data = inspect_room.run(context, {"room_id": "living_room"})
     assert data["env"] == {"temperature": 26, "humidity": 45, "illuminance": 800, "pm10": 25}
-    assert data["devices"] == ["living_room_ac", "living_room_tv"]
+    assert [item["device_id"] for item in data["devices"]] == ["living_room_ac", "living_room_tv"]
+    assert set(data["devices"][0]) == {"device_id", "display_name", "kind", "device_type"}
+    assert data["devices"][0]["display_name"], data["devices"][0]
+    assert data["devices"][0]["kind"] == "climate"
     assert data["doors"] is None
 
     try:
@@ -192,6 +204,35 @@ def test_inspect_room_on_fixture() -> None:
         assert err.code is ErrorCode.BAD_REQUEST
     else:
         raise AssertionError("缺 room_id 应当报 BAD_REQUEST")
+
+
+def test_finish_on_fixture() -> None:
+    """finish：completed / refused 的合法组合通过，非法组合报 BAD_REQUEST。"""
+
+    context = FixtureContext()
+    ok = finish.run(context, {"outcome": "completed", "summary": "灯已关"})
+    assert ok["accepted"] is True and ok["outcome"] == "completed", ok
+
+    refused = finish.run(
+        context,
+        {"outcome": "refused", "reason_code": "OUT_OF_SAFE_RANGE", "summary": "超出安全范围"},
+    )
+    assert refused["accepted"] is True and refused["reason_code"] == "OUT_OF_SAFE_RANGE", refused
+
+    for bad in (
+        {},                                                             # 缺 outcome
+        {"outcome": "done"},                                            # 枚举外
+        {"outcome": "refused"},                                         # refused 缺 reason_code
+        {"outcome": "completed", "reason_code": "OUT_OF_SAFE_RANGE"},   # completed 带 reason_code
+        {"outcome": "refused", "reason_code": "OTHER"},                 # 枚举外 reason_code
+        {"outcome": "completed", "facts": ["x"]},                       # 多余字段
+    ):
+        try:
+            finish.run(context, bad)
+        except HomeMcpError as err:
+            assert err.code is ErrorCode.BAD_REQUEST, bad
+        else:
+            raise AssertionError(f"{bad} 应当报 BAD_REQUEST")
 
 
 def test_inspect_device_on_fixture() -> None:
@@ -253,6 +294,7 @@ def test_inspect_device_on_fixture() -> None:
     assert swallowed["verified"] is False, swallowed
     assert "未在" in swallowed.get("verify_note", ""), swallowed
     assert swallowed["state_after"]["on"] is False, "状态确实没变"
+    assert swallowed["changed"] is False and swallowed["state_diff"] == {}, swallowed
     assert swallowed["steps"][0]["service"] == "switch.turn_on", "命令确实发出去了"
     assert len(swallowed_context.client.calls) == 1, "假 HA 收到了这次调用"
 
@@ -296,6 +338,7 @@ def test_execute_action_on_fixture() -> None:
 
     opened = execute_action.run(context, {"device_id": "living_room_tv", "action": "turn_on"})
     assert opened["verified"] is True and opened["state_after"]["on"] is True, opened
+    assert opened["changed"] is True and opened["state_diff"].get("on"), opened
     assert opened["steps"] == [
         {"target": "switch.simuhome_living_room_tv", "service": "switch.turn_on", "data": {}}
     ], opened["steps"]
@@ -449,11 +492,13 @@ def main() -> int:
     checks = [
         test_contract_shape,
         test_registry_enforces_contract,
+        test_registry_expose_filter,
         test_call_tool_envelope,
-        test_stubs_are_not_implemented,
+        test_backend_modules_cover_contract,
         test_mapping_rules,
         test_observe_home_on_fixture,
         test_inspect_room_on_fixture,
+        test_finish_on_fixture,
         test_inspect_device_on_fixture,
         test_query_events_on_fixture,
         test_execute_action_on_fixture,

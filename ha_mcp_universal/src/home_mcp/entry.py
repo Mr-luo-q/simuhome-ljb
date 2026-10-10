@@ -37,15 +37,26 @@ def load_backend(name: str):
 
 
 def build_application(config: dict[str, Any]):
-    """组装后端工具表与协议壳，返回 (后端名, MCP Server)。"""
+    """组装后端工具表与协议壳，返回 (后端名, MCP Server, 已开放注册表)。"""
 
     backend_name = str(config.get("backend", "ha"))
     backend = load_backend(backend_name)
     backend_tools = backend.load(config)
-    registry = shell.build_registry(backend_tools)
+    expose_cfg = (config.get("tools") or {}).get("expose")
+    expose: list[str] | None = None
+    if expose_cfg is not None:
+        if not isinstance(expose_cfg, list) or not all(isinstance(item, str) for item in expose_cfg):
+            raise ConfigError("tools.expose 必须是字符串列表")
+        expose = [str(item) for item in expose_cfg]
+    registry = shell.build_registry(backend_tools, expose=expose)
     mcp_server = shell.build_server(registry, version=__version__)
-    LOG.info("后端 %s 就绪，注册工具 %d 个：%s", backend_name, len(registry), shell.list_tool_names())
-    return backend_name, mcp_server
+    LOG.info(
+        "后端 %s 就绪，开放工具 %d 个：%s",
+        backend_name,
+        len(registry),
+        shell.list_tool_names(registry),
+    )
+    return backend_name, mcp_server, registry
 
 
 async def serve_stdio(mcp_server) -> None:
@@ -79,13 +90,13 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         config = load_config(config_path)
-        _backend_name, mcp_server = build_application(config)
+        _backend_name, mcp_server, registry = build_application(config)
     except (ConfigError, MissingToolsError, HomeMcpError) as exc:
         LOG.error("启动失败：%s", exc)
         return 2
 
     if args.dry_run:
-        print("\n".join(shell.list_tool_names()))
+        print("\n".join(shell.list_tool_names(registry)))
         return 0
 
     transport = str((config.get("server") or {}).get("transport", "stdio"))

@@ -1,5 +1,6 @@
-"""inspect_room：读一个房间的环境量、设备清单与门状态。
+"""inspect_room：读一个房间的环境量、设备摘要与门状态。
 
+devices 每条是 {device_id, display_name, kind, device_type}，与另一端的数据合成沙箱对齐；
 门状态目前恒为 null：这套系统里还没有门磁实体，query_topology 也在二期。
 """
 
@@ -28,10 +29,21 @@ def run(context: Any, arguments: dict[str, Any]) -> dict[str, Any]:
 
     states = context.client.get_states()
     by_id = {str(item.get("entity_id")): item for item in states}
+    devices = []
+    for device_id in view.devices_in_area(room_id):
+        row = view.devices[device_id]
+        devices.append(
+            {
+                "device_id": row.device_id,
+                "display_name": row.name,
+                "kind": row.kind,
+                "device_type": row.domain,
+            }
+        )
     return {
         "room_id": room_id,
         "name": view.areas[room_id],
         "env": collect_env(by_id, view.sensors_by_area.get(room_id, [])),
-        "devices": view.devices_in_area(room_id),
+        "devices": devices,
         "doors": None,      # 没有门磁实体，二期接拓扑前恒为 null
     }

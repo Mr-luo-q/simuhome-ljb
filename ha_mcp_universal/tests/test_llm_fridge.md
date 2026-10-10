@@ -15,6 +15,10 @@
 对应   tests\test_llm_fridge.py
 ```
 
+调用记录（`ask_model`）保存每次的 tool / arguments / ok / data / verified /
+state_after / error；`data` 是返回数据原文，供 `test_llm_surface.py` 断言
+list 里有没有某张预约单（2026-10-10 增）。
+
 ## 六项判定
 
 ```text

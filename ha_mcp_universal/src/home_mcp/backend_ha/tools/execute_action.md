@@ -18,11 +18,13 @@
 状态   已实现（M3）
 职责   执行一次规范动作：四道闸门 → 调 HA 服务 → 回读验证
 输入   {device_id, action, params?}
-输出   result{device_id, action, params, state_after{}, steps[], verified, elapsed_ms}
+输出   result{device_id, action, params, state_after{}, state_diff{}, changed,
+        steps[], verified, elapsed_ms}
 读取   /api/states/{entity_id}（可用性与回读）
 写入   HA 服务调用（switch / climate / fan 的 turn_on 等；经 MQTT 到 SimuHome）
 不负责 不替模型编排多步计划、不执行契约外的动作
 对应   src\home_mcp\backend_ha\tools\execute_action.py
+内核   src\home_mcp\backend_ha\execution.py（perform_action；预约到点共用同一条路径）
 ```
 
 ## 四道闸门（顺序不能换）
@@ -54,4 +56,6 @@ set_percentage                →  fan.set_percentage（参数 value → percent
          （HA 服务调用是异步的，状态可能稍后才变）
         这条分支由契约测试覆盖：假 HA 开 swallow_writes，收下命令但不改状态
 steps    结构化记录：[{target, service, data}]
+state_diff 执行前后六字段的差异，只列实际变化的字段；changed = state_diff 非空
+           （对齐另一数据合成端 execute_action 的返回口径）
 ```

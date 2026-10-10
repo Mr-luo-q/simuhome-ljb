@@ -145,6 +145,7 @@ async def ask_model(
                     "tool": tool_call.function.name,
                     "arguments": arguments,
                     "ok": bool(payload.get("ok")),
+                    "data": payload.get("data"),
                     "verified": (payload.get("data") or {}).get("verified"),
                     "state_after": (payload.get("data") or {}).get("state_after"),
                     "error": (payload.get("error") or {}).get("code"),

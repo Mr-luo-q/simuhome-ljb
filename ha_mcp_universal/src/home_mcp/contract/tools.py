@@ -1,4 +1,4 @@
-"""8 个工具的契约：工具名、参数、返回、错误码、时间语义与论文口径对照。
+"""8 个家庭工具 + finish 协议工具的契约：工具名、参数、返回、错误码、时间语义与论文口径对照。
 
 这里是唯一语义来源——协议层按它注册工具，后端按它实现；契约里只依赖标准库，
 所以错误码写成字符串，与 errors.py 的一致性由契约测试保证。
@@ -59,6 +59,17 @@ CONDITION_ITEM_SCHEMA: dict[str, Any] = {
     "required": ["target", "op", "value"],
 }
 
+# ACTION_CALL：立即执行与预约 steps 共用的动作调用 schema
+ACTION_CALL_ITEM_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "device_id": {"type": "string", "description": "设备 id"},
+        "action": {"type": "string", "description": "规范动作名"},
+        "params": {"type": "object", "description": "动作参数，如 {value: 26}"},
+    },
+    "required": ["device_id", "action"],
+}
+
 TOOLS: tuple[ToolSpec, ...] = (
     ToolSpec(
         name="observe_home",
@@ -116,31 +127,17 @@ TOOLS: tuple[ToolSpec, ...] = (
     ),
     ToolSpec(
         name="time_control",
-        summary="推进或等待时间：advance 等到某时刻 / 条件，schedule 预约未来动作，list 与 cancel 管理预约",
+        summary="一次性预约：schedule 写单 / list 查未执行的单 / cancel 取消",
         params=(
-            ParamSpec("op", "string", True, "操作", ("advance", "schedule", "list", "cancel")),
-            ParamSpec("seconds", "number", False, "advance 用：等待或推进的秒数"),
-            ParamSpec("at", "string", False, "schedule 用：绝对时间，ISO 格式"),
-            ParamSpec(
-                "steps",
-                "array",
-                False,
-                "schedule 用：到点执行的动作列表",
-                items={
-                    "type": "object",
-                    "properties": {
-                        "device_id": {"type": "string", "description": "设备 id"},
-                        "action": {"type": "string", "description": "规范动作名"},
-                        "params": {"type": "object", "description": "动作参数"},
-                    },
-                    "required": ["device_id", "action"],
-                },
-            ),
+            ParamSpec("op", "string", True, "操作", ("schedule", "list", "cancel")),
+            ParamSpec("at", "string", False, "schedule 用：YYYY-MM-DD HH:MM（家庭时区）"),
+            ParamSpec("steps", "array", False, "schedule 用：1~8 条动作调用", items=ACTION_CALL_ITEM_SCHEMA),
+            ParamSpec("schedule_id", "string", False, "cancel 用：schedule 返回的单号"),
         ),
-        returns="snapshot{} 或 {schedule_id}",
-        errors=("HA_UNREACHABLE", "BAD_REQUEST", "INVALID_TIME", "VERIFY_TIMEOUT", "NOT_IMPLEMENTED"),
+        returns="schedule → {schedule_id, at, status}；list → {now, items[{schedule_id, at}]} 只含未执行的单；cancel → {schedule_id, status}",
+        errors=("INVALID_TIME", "BAD_REQUEST", "UNKNOWN_DEVICE", "UNSUPPORTED_ACTION"),
         time_semantics="both",
-        maps_to="wait_for_event",
+        maps_to="schedule_once",
     ),
     ToolSpec(
         name="check_goal",
@@ -182,16 +179,43 @@ TOOLS: tuple[ToolSpec, ...] = (
     ),
     ToolSpec(
         name="memory",
-        summary="长期记忆读写：按 key 存取值",
+        summary="长期记忆读写：整段文本，read 返回原文，write 整段替换",
         params=(
-            ParamSpec("op", "string", True, "操作", ("read", "write")),
-            ParamSpec("key", "string", True, "键名"),
-            ParamSpec("value", "string", False, "write 用：写入的值"),
+            ParamSpec("op", "string", False, "操作，默认 read", ("read", "write")),
+            ParamSpec("text", "string", False, "write 用：完整记忆文本；read 不要带"),
         ),
-        returns="memory{key, value, updated_at}",
-        errors=("UNKNOWN_KEY", "BAD_REQUEST", "NOT_IMPLEMENTED"),
+        returns="read → {text}；write → {code: OK}",
+        errors=("BAD_REQUEST", "SERVICE_ERROR"),
         time_semantics="none",
         maps_to="memory_read / memory_write",
+    ),
+    ToolSpec(
+        name="finish",
+        summary="结束本轮任务：声明完成或拒绝（协议工具，不操作设备）",
+        params=(
+            ParamSpec("outcome", "string", True, "结果：completed 或 refused", ("completed", "refused")),
+            ParamSpec(
+                "reason_code",
+                "string",
+                False,
+                "refused 用：拒绝原因",
+                ("OUT_OF_SAFE_RANGE", "READ_ONLY_DEVICE"),
+            ),
+            ParamSpec("summary", "string", False, "一句话说明，可选"),
+        ),
+        returns="accepted{outcome, reason_code, summary}",
+        errors=("BAD_REQUEST",),
+        time_semantics="none",
+        maps_to="finish",
+    ),
+    ToolSpec(
+        name="inspect_time",
+        summary="读当前时间：家庭时区的分钟级时刻与时钟类型",
+        params=(),
+        returns="{now, clock}",
+        errors=("BAD_REQUEST",),
+        time_semantics="both",
+        maps_to="inspect_time",
     ),
 )
 

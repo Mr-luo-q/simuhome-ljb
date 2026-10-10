@@ -50,8 +50,26 @@ events:
     - sensor.simuhome_virtual_time
 
 memory:
-  file: ./data/memory.yaml           # 记忆文件：实验方准备，服务端只读，
-                                     # 由 memory 工具原样返回整段（见 11 号 §5.7）
+  file: ./data/memory.yaml           # 记忆文件：整段文本，读写同构（见 14 号）
+  max_write_tokens: 200              # 写入硬上限；超过 BAD_REQUEST
+  max_read_tokens: 300               # 读取超限按内部策略截断
+
+time:
+  timezone: Asia/Shanghai
+  db: ./data/schedules.db            # 预约单落盘位置
+  max_horizon_days: 7                # 预约最远期限
+  max_steps: 8                       # 单张预约单最多动作数
+
+tools:
+  expose:                       # 对模型开放的白名单；留空 = 开放契约里的全部工具
+    - observe_home
+    - inspect_room
+    - inspect_device
+    - execute_action
+    - finish
+    - inspect_time
+    - time_control
+    - memory
 
 server:
   transport: stdio              # stdio 或 http

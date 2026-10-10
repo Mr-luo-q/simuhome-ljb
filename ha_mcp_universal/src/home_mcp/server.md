@@ -7,7 +7,7 @@
 
 ```text
 输入   后端工具表 {工具名: 可调用}；工具调用参数
-输出   统一外壳 {ok, data, error, meta{elapsed_ms, clock}}；MCP 的 Tool 列表
+输出   模型可见 {ok, data, error}；meta{elapsed_ms, clock} 只留内部日志；MCP 的 Tool 列表
 读取   contract 的契约；errors 的错误码
 写入   无（调用日志在 M4 接到 runtime 的 calls 表）
 不负责   不实现任何工具、不连任何后端、不做参数语义校验（只看 schema）
@@ -17,10 +17,13 @@
 ## 关键行为
 
 ```text
-build_registry()   后端少实现或多实现工具时抛 MissingToolsError —— 启动期就失败
-call_tool()        未定义工具 / 后端缺失 / 业务异常 / 未知异常，一律转成 ok=false 的外壳，不往外抛
-build_server()     用 mcp SDK 的 low-level Server，工具 schema 由契约生成
-meta.clock         取契约里的 time_semantics，标明这次调用消耗的是哪种时间
+build_registry()   后端少实现或多实现工具时抛 MissingToolsError —— 启动期就失败；
+                   带 tools.expose 白名单时按名单顺序注册；名单里有未定义名字同样报错
+call_tool()        未定义工具、契约里有但未开放的工具、业务异常、未知异常，
+                   一律转成 ok=false 的外壳，不往外抛
+build_server()     用 mcp SDK 的 low-level Server；tools/list 只列注册表里开放的工具
+meta 处理          call_tool 内部保留 elapsed_ms 与契约 clock；
+                  build_server 下发前剥离并记 debug 日志，模型看不到 meta
 ```
 
 ## 约束

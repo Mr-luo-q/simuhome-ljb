@@ -12,7 +12,8 @@
 可验收   契约 12/12、真机端到端 21/21、大模型冒烟 9/9、降级与恢复 21/21
 记忆     2026-09-18 晚定稿：memory 工具保留，但按 SMH 的口径简化成只读——
          记忆由实验方准备成文件，memory() 原样返回整段；工具面仍是 8 个
-下一步   先补三处规格（cancel 的 schedule_id、advance 上限口径、time 配置段），再按 M4a/M4b/M4c 开工
+下一步   先补两处规格（cancel 的 schedule_id、time 配置段）；advance 与相对时间已拍板去掉
+         （2026-10-06），再按 M4a/M4b/M4c 开工
 ```
 
 ## 1. 已实现的功能
@@ -49,7 +50,7 @@ M3（2026-09-18）  execute_action：四道闸门 + 回读；check_goal：condit
 | `execute_action` | `device_id`、`action`、`?params` | result{device_id, action, state_after{}, steps[], elapsed_ms, verified, ?verify_note} | 已实现 |
 | `check_goal` | `conditions`、`?keep` | goals[...] + keep[...] + all_pass | 已实现 |
 | `query_events` | `?since`、`?until`、`?entity_id`、`?limit` | events[{ts, entity_id, state, name}] | 已实现（扩展项） |
-| `time_control` | `op`、`?seconds`、`?at`、`?steps` | snapshot{} 或 {schedule_id} | 未实现（NOT_IMPLEMENTED） |
+| `time_control` | `op`(schedule/list/cancel)、`?at`、`?steps`、`?schedule_id` | {schedule_id} 或预约数组 | 未实现（NOT_IMPLEMENTED） |
 | `memory` | 无（简化后） | `{text}`：整段记忆原文 | 未实现；新计划改成只读版（见 3.2） |
 
 两点要注意：一是模型在 `tools/list` 里只看得到 `summary` + 参数的 JSON Schema，
@@ -235,26 +236,23 @@ C 全工具（原设计）         read 与 write 都靠模型自己调：最贴
 ```text
 代码      src\home_mcp\backend_ha\tools\time_control.py 是空实现 → 抛 NOT_IMPLEMENTED
 调度器    没有。runtime.py 只有配置加载（78 行），没有 sqlite、没有后台循环
-契约      time_control(op=advance|schedule|list|cancel, seconds?, at?, steps?)
-三处缺口   ① cancel 没有 schedule_id，"取消哪个预约"没法表达；list 也没有窗口或状态过滤
-          ② advance 的上限口径没定：11 号写"超时 30 s 记 VERIFY_TIMEOUT（不算失败）"，
-             但 VERIFY_TIMEOUT 是"调用成功但状态没按时变"，与"等待超上限"是两件事
-          ③ config.example.yaml 里没有 time 段，30 s 上限没地方配
+契约      time_control(op=schedule|list|cancel, at?, steps?, schedule_id?)
+两处缺口   ① cancel 没有 schedule_id，"取消哪个预约"没法表达；list 也没有窗口或状态过滤
+          ② config.example.yaml 里没有 time 段（时区 / 预约期限 / 清理策略没地方配）
+          （原第②条 advance 上限已作废：2026-10-06 拍板去掉 advance 与相对时间）
 ```
 
 ### 4.2 计划
 
-四个 op 的语义：
+三个 op 的语义：
 
 ```text
-advance(seconds)   真等 seconds 秒（HA 侧 1:1，不能快进）→ 返回等待后的快照
-                   上限放进 config 的 time.max_advance_s（默认 30）；超上限直接 BAD_REQUEST，
-                   hint 写明上限与替代做法（用 schedule 或轮询）
 schedule(at, steps) at 是绝对时间（ISO，未来），steps 是 [{device_id, action, params}]
                    → 校验 at 在未来（过去 → INVALID_TIME）、逐个动作过 execute_action 的同一套闸门
                    → 写一行 schedules(id, due_at, steps, status='pending', created_at) → 返回 {schedule_id}
 list(?)            列出本实例的预约与结果（M4 先返回全部，窗口过滤二期）
 cancel(schedule_id) pending → cancelled；已完成/已取消失败 → BAD_REQUEST 并说明当前状态
+                   advance 与相对时间已拍板去掉（2026-10-06），不做等待
 ```
 
 调度器的位置与执行路径：
@@ -284,7 +282,7 @@ cancel(schedule_id) pending → cancelled；已完成/已取消失败 → BAD_RE
 
 ```text
 M4a  sqlite + calls + memory 只读化（清空参数、读 data\memory.yaml 返回整段）   0.5 天
-M4b  advance（上限 + progress 通知）→ schedule / list / cancel（调度器 + 重启装载）   1 天
+M4b  schedule / list / cancel（调度器 + 重启装载）   1 天
 M4c  三个单测（conditions / clock / runtime）+ M4 验收                 0.5 天
 ```
 
@@ -292,10 +290,11 @@ M4c  三个单测（conditions / clock / runtime）+ M4 验收                 0
 
 ```text
 1  contract\tools.py 里 time_control 的 summary 还写着"advance 等到某时刻 / 条件"
-   —— 与"只接受秒数、不提供条件等待"冲突，而且这是模型在 tools/list 里读到的原文
+   —— 按新口径改成"预约单：schedule 写单 / list 查单 / cancel 撕单"，
+   这是模型在 tools/list 里读到的原文
 2  execute_action 契约的 returns 文本没写 verified / verify_note（实现已经返回这两个字段）
 3  VERIFY_TIMEOUT 只在 errors.py 与 time_control 契约里出现，代码里没人抛；
-   M4 要么把它用在 advance 上限上（若这么定），要么从契约里删掉
+   本期 time_control 不再声明它（没有等待）；该码保留给二期条件等待，或从契约里删
 4  派生目录 README 说"12 号以能力标签与动作词表为准"，但 12 号已取消能力标签体系
 5  11 号 §3.2 的 _tools 清单漏了 start_simuhome_stack.ps1 / .md
 另有一处死配置：发布器 discovery payload 里的 "object_id" 无效果（HA 的 MQTT discovery
@@ -307,7 +306,7 @@ memory.py 改成读文件返回）随 M4 一起做；工具面仍是 8 个
 ## 6. 还没实现的总清单
 
 ```text
-M4 范围      time_control（advance / schedule / list / cancel）、runtime 的 sqlite 与调度器、
+M4 范围      time_control（schedule / list / cancel）、runtime 的 sqlite 与调度器、
              memory 简化（只读返回 data\memory.yaml 的整段，不留 key / write / 表）、
              三个单测（conditions / clock / runtime）
 M5 范围      第 10 节验收表填满、8 动作 × 2 后端覆盖率报告、calls 表统计、探针复跑
@@ -320,7 +319,7 @@ M5 范围      第 10 节验收表填满、8 动作 × 2 后端覆盖率报告�
 ## 7. 怎么算做完（M4 的验收方式）
 
 ```text
-advance      advance(seconds=5) 返回快照，耗时 ≈5 s（误差 <1 s）；advance(seconds=60) → BAD_REQUEST
+参数校验     过去时间 → INVALID_TIME；steps 空 / 超限 → BAD_REQUEST；不带偏移的 at 按 home 时区解释
 schedule     schedule(at=now+10s, steps=[关灯]) → {schedule_id}；
              list 里能看到 pending；10 秒后 list 显示 done，回读灯确为 off
 cancel       schedule 之后立刻 cancel → list 显示 cancelled，到点灯不动

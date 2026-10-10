@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from typing import Any, Callable
 
@@ -17,12 +18,21 @@ from .contract import TOOLS, by_name, extra_tools, missing_tools, to_json_schema
 from .errors import HomeMcpError, MissingToolsError, bad_request, to_payload
 
 
+LOG = logging.getLogger(__name__)
+
+
 # 后端实现的签名：吃一个参数字典，返回参数字典结果；错误用 HomeMcpError 抛
 ToolCallable = Callable[[dict[str, Any]], dict[str, Any]]
 
 
-def build_registry(backend_tools: dict[str, ToolCallable]) -> dict[str, ToolCallable]:
-    """校验后端工具表与契约一致，并整理成契约顺序的字典。"""
+def build_registry(
+    backend_tools: dict[str, ToolCallable], *, expose: list[str] | None = None
+) -> dict[str, ToolCallable]:
+    """校验后端工具表与契约一致，并按 expose 白名单整理出对模型开放的工具。
+
+    expose 为 None 时开放契约里的全部工具；给了列表就只开放列表里的，
+    未在契约里定义的名字属于配置错误，启动期直接报错。
+    """
 
     missing = missing_tools(backend_tools)
     extra = extra_tools(backend_tools)
@@ -30,13 +40,24 @@ def build_registry(backend_tools: dict[str, ToolCallable]) -> dict[str, ToolCall
         raise MissingToolsError(
             f"后端与契约不一致：缺少 {missing}，多出 {extra}"
         )
-    return {spec.name: backend_tools[spec.name] for spec in TOOLS}
+    contract_names = [spec.name for spec in TOOLS]
+    if expose is None:
+        names = contract_names
+    else:
+        unknown = sorted(set(expose) - set(contract_names))
+        if unknown:
+            raise MissingToolsError(f"tools.expose 含未定义的工具：{unknown}")
+        # 白名单顺序 = 对模型暴露的顺序；便于把新工具接在老工具后面
+        names = [name for name in expose if name in backend_tools]
+    return {name: backend_tools[name] for name in names}
 
 
-def list_tool_names() -> list[str]:
-    """按契约顺序返回工具名，供 tools/list 使用。"""
+def list_tool_names(registry: dict[str, ToolCallable] | None = None) -> list[str]:
+    """按契约顺序返回工具名；给了 registry 就只返回实际开放的工具。"""
 
-    return [spec.name for spec in TOOLS]
+    if registry is None:
+        return [spec.name for spec in TOOLS]
+    return list(registry)
 
 
 def _envelope(
@@ -76,7 +97,12 @@ def call_tool(
     if tool is None:
         return _envelope(
             False,
-            error=to_payload(bad_request(f"后端没有实现工具：{name}")),
+            error=to_payload(
+                bad_request(
+                    f"工具当前未开放：{name}",
+                    "本轮只开放已对齐的工具；以 tools/list 为准",
+                )
+            ),
             elapsed_ms=int((time.perf_counter() - started) * 1000),
             clock=spec.time_semantics,
         )
@@ -122,7 +148,8 @@ def build_server(
                 description=spec.summary,
                 inputSchema=to_json_schema(spec),
             )
-            for spec in TOOLS
+            for spec in (by_name(name) for name in registry)
+            if spec is not None
         ]
 
     @mcp_server.call_tool()
@@ -130,6 +157,10 @@ def build_server(
         """调用工具并把统一外壳作为文本内容返回。"""
 
         envelope = call_tool(registry, tool_name, arguments)
+        # meta 是内部遥测：只记日志，不下发给模型
+        meta = envelope.pop("meta", None)
+        if meta:
+            LOG.debug("tools/call %s meta=%s", tool_name, meta)
         text = json.dumps(envelope, ensure_ascii=False)
         return types.CallToolResult(
             content=[types.TextContent(type="text", text=text)],
