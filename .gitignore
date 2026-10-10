@@ -11,6 +11,7 @@
 !/old_simuhome_bridge_project/
 !/_tools/
 !/context/
+!/deploy/
 
 # 通用排除
 __pycache__/

@@ -18,10 +18,12 @@ ROOT = Path(__file__).resolve().parent.parent
 # 本仓库跟踪的目录：写清用途，source.md 会按它生成第一张表
 TRACKED: dict[str, str] = {
     "finally new paper": "论文讨论与设计文档、benchmark 与方法论文整理、架构图",
-    "ha_mcp_server": "自建 MCP server 项目（当前只有长期计划与说明）",
-    "simuhome_mqtt_publisher": "MQTT 接入工程：broker 配置与启动脚本，发布器（M2 待实现）",
-    "old_simuhome_bridge_project": "已退役的 SimuHome×HA 桥接工程（含仍在用的 compose.yaml 与 SimuHome 启动脚本）",
-    "_tools": "本地工具与探针：MQTT broker 包、架构探针脚本（安装包与 wheels 不入库）",
+    "ha_mcp_server": "v1 MCP server（冻结，论文主实验口径）",
+    "ha_mcp_universal": "v2 MCP server：通用化接入，8 个统一语义工具",
+    "simuhome_mqtt_publisher": "MQTT 接入工程：broker 配置、发布器、实体改名脚本",
+    "old_simuhome_bridge_project": "已退役的 SimuHome×HA 桥接工程（compose.yaml 历史版本）",
+    "deploy": "部署文档组（MCP / 沙盒 / 米家三层）与通用版 HA compose",
+    "_tools": "本地工具与探针：一键拉起脚本、MQTT broker 包（安装包与 wheels 不入库）",
     "context": "跨会话上下文与笔记",
 }
 

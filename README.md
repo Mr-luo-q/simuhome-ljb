@@ -6,7 +6,10 @@
 
 ```text
 finally new paper\        论文讨论与设计文档、benchmark 与方法论文整理、架构图
-ha_mcp_server\            自建 MCP server 项目（计划与后续代码）
+ha_mcp_server\            v1：自建 MCP server（冻结，论文主实验口径）
+ha_mcp_universal\         v2：通用化接入的 MCP server（8 个统一语义工具）
+simuhome_mqtt_publisher\  SimuHome → MQTT → HA 的接入工程（broker + 发布器）
+deploy\                   部署文档（MCP / 沙盒 / 米家三层）与通用版 HA compose
 old_simuhome_bridge_project\  早期 SimuHome×HA 桥接工程（历史参考，不再扩展）
 _tools\                   本地工具：HA WebSocket 查询、source.md 生成、MQTT 安装包
 context\                  跨会话上下文与笔记
@@ -17,7 +20,8 @@ context\                  跨会话上下文与笔记
 ```text
 oldmcp\                   已废弃的早期 MCP 实验（改名后退出跟踪，仅留档，不参考）
 ha_core_official\         Home Assistant 官方源码克隆（含自己的 .git）
-simuprocject\             SimuHome 仿真内核源码
+simuprocject\             SimuHome 仿真内核源码（上游 github.com/Mr-luo-q/Simuhome_experiment，
+                          按 deploy\03 克隆；不入库）
 tdp-nlu-private-main\     外部项目副本（5.9 GB）
 sandbox\                  外部项目副本（1.5 GB）
 related paper\ 等          论文 PDF 与资料
@@ -44,6 +48,12 @@ git commit -m "说明这次改了什么"
 
 ```text
 source.md                                     自动生成的目录与来源登记表
+deploy\01_部署总览.md                          三层部署文档（MCP / 沙盒 / 米家）+ 环境与端口约定
+deploy\02_快速开始-MCP连接自己的HA.md
+deploy\03_沙盒全链路部署.md
+deploy\04_米家真机接入.md
+deploy\05_常见问题与排错.md
+ha_mcp_universal\README.md                    v2 MCP server 的现状、测试与快速开始
 finally new paper\HomeAssistant双仓库接口分析\  01~06、08~14 号文档（无 07）
                                               11 最终设计（实现以它为准）、12 统一粒度、
                                               13 实现现状与计划、14 接口交接（RL demo 用）
@@ -53,4 +63,5 @@ finally new paper\UbiComp三支柱讨论\12_投稿策略-把三个支柱的故�
                                               投稿策略基线（关键路径）：技术取舍按它判断
 ha_mcp_server\PLAN.md                         MCP 项目的长期计划
 simuhome_mqtt_publisher\README.md             SimuHome→MQTT→HA 的实际接入工程
+finally new paper\10_04V2接入小米后设计方案\    v2 设计文档（14 接口详细设计、15 交付口径、16 任务梳理）
 ```

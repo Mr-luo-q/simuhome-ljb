@@ -8,9 +8,19 @@
 输入   -ResetHome 开关（可选）：强制把 SimuHome 重置回 home_full.json 的初始状态
 输出   各步进度 + 末尾汇总（房间数 / 各进程 / HA 实体数与 unavailable 数）
 读取   _secrets\ha_token.txt（查 HA 实体）、simuprocject\Simuhome_experiment\home_full.json
+       （SimuHome 上游源码不在仓库里，按 deploy\03 克隆）
 写入   起 Docker Desktop、HA 容器、SimuHome API、mosquitto、发布器；必要时重置 SimuHome home
-不负责   不跑验收测试（那是 ha_mcp_server\tests\ 的事），不改 HA 配置
+不负责   不跑验收测试（那是 ha_mcp_universal\tests\ 的事），不改 HA 配置
 对应   _tools\start_simuhome_stack.ps1
+```
+
+## 前置
+
+```text
+① SimuHome 已克隆到 simuprocject\Simuhome_experiment（含 home_full.json，见 deploy\03）
+② Mosquitto 已安装，且已跑过 broker\make_credentials.ps1 生成账号文件
+③ HA 容器；不存在时脚本用 deploy\compose.yaml 建，需要先设环境变量：
+   $env:HA_CONFIG_DIR = "D:\homeassistant\config"
 ```
 
 ## 顺序与依赖
@@ -34,7 +44,8 @@ SimuHome 重启后 `home` 是空的：`/api/home/state` 返回 0 个房间，
 ## 用法
 
 ```powershell
-cd D:\D_coderesource\simuhome
+cd <仓库根>
+$env:HA_CONFIG_DIR = "D:\homeassistant\config"    # 首次建 HA 容器用；已存在可忽略
 powershell -NoProfile -ExecutionPolicy Bypass -File _tools\start_simuhome_stack.ps1
 # 需要把仿真恢复到初始状态（例如实验跑前）时：
 powershell -NoProfile -ExecutionPolicy Bypass -File _tools\start_simuhome_stack.ps1 -ResetHome

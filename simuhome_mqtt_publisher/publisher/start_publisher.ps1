@@ -1,27 +1,33 @@
 ﻿# 后台启动 SimuHome → MQTT 发布器
-$root = "D:\D_coderesource\simuhome\simuhome_mqtt_publisher"
-$python = "C:\ProgramData\anaconda3\python.exe"
-$script = "$root\publisher\publisher.py"
-$logDir = "$root\logs"
+$root = Split-Path -Parent $PSScriptRoot
+$script = Join-Path $PSScriptRoot "publisher.py"
+$logDir = Join-Path $root "logs"
+
+$python = (Get-Command python -ErrorAction SilentlyContinue).Source
+if (-not $python) { $python = (Get-Command py -ErrorAction SilentlyContinue).Source }
+if (-not $python) {
+    Write-Error "找不到 python，请安装 Python 3.11+ 并加入 PATH"
+    exit 1
+}
 
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
 $running = Get-CimInstance Win32_Process |
-    Where-Object { $_.CommandLine -like "*publisher\publisher.py*" } |
+    Where-Object { $_.CommandLine -like "*publisher.py*" } |
     Select-Object -First 1
 
 if (-not $running) {
     Start-Process $python `
         -ArgumentList $script `
-        -WorkingDirectory "$root\publisher" `
+        -WorkingDirectory $PSScriptRoot `
         -WindowStyle Hidden `
-        -RedirectStandardOutput "$logDir\publisher.console.log" `
-        -RedirectStandardError "$logDir\publisher.console.err.log"
+        -RedirectStandardOutput (Join-Path $logDir "publisher.console.log") `
+        -RedirectStandardError (Join-Path $logDir "publisher.console.err.log")
     Start-Sleep -Seconds 5
 }
 
 $proc = Get-CimInstance Win32_Process |
-    Where-Object { $_.CommandLine -like "*publisher\publisher.py*" } |
+    Where-Object { $_.CommandLine -like "*publisher.py*" } |
     Select-Object -First 1
 
 if ($proc) {

@@ -1,5 +1,8 @@
 # run_broker.py 说明
 
+> 已退役：broker 已切换到 Mosquitto 原生版（start_mosquitto.ps1）；
+> 本文与 run_broker.py / broker.yaml 只保留 amqtt 时期的记录，不再维护。
+
 ## 功能
 
 常驻运行 amqtt broker，读取同目录的 `broker.yaml`，按配置监听 TCP 端口（默认 0.0.0.0:1883）。

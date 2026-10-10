@@ -1,6 +1,6 @@
 # source.md
 
-本文件由 `_tools/update_source.py` 自动生成，最后更新：2026-09-18 01:45。
+本文件由 `_tools/update_source.py` 自动生成，最后更新：2026-10-10 21:07。
 
 仓库只跟踪下面第一张表里的目录；第二、三张表里的内容不入库，只登记来源与体积。
 
@@ -8,11 +8,13 @@
 
 | 目录 | 用途 | 大小 | 文件数 | 最后修改 |
 | --- | --- | --- | --- | --- |
-| `finally new paper` | 论文讨论与设计文档、benchmark 与方法论文整理、架构图 | 122.4 MB | 236 | 2026-09-16 |
-| `ha_mcp_server` | 自建 MCP server 项目（当前只有长期计划与说明） | 0.3 MB | 87 | 2026-09-18 |
-| `simuhome_mqtt_publisher` | MQTT 接入工程：broker 配置与启动脚本，发布器（M2 待实现） | 0.2 MB | 42 | 2026-09-17 |
-| `old_simuhome_bridge_project` | 已退役的 SimuHome×HA 桥接工程（含仍在用的 compose.yaml 与 SimuHome 启动脚本） | 0.7 MB | 12 | 2026-06-21 |
-| `_tools` | 本地工具与探针：MQTT broker 包、架构探针脚本（安装包与 wheels 不入库） | 29.9 MB | 30 | 2026-09-17 |
+| `finally new paper` | 论文讨论与设计文档、benchmark 与方法论文整理、架构图 | 167.3 MB | 277 | 2026-10-07 |
+| `ha_mcp_server` | v1 MCP server（冻结，论文主实验口径） | 0.3 MB | 91 | 2026-09-18 |
+| `ha_mcp_universal` | v2 MCP server：通用化接入，8 个统一语义工具 | 1.0 MB | 153 | 2026-10-10 |
+| `simuhome_mqtt_publisher` | MQTT 接入工程：broker 配置、发布器、实体改名脚本 | 0.2 MB | 44 | 2026-10-10 |
+| `old_simuhome_bridge_project` | 已退役的 SimuHome×HA 桥接工程（compose.yaml 历史版本） | 0.7 MB | 12 | 2026-06-21 |
+| `deploy` | 部署文档组（MCP / 沙盒 / 米家三层）与通用版 HA compose | 0.0 MB | 6 | 2026-10-10 |
+| `_tools` | 本地工具与探针：一键拉起脚本、MQTT broker 包（安装包与 wheels 不入库） | 29.9 MB | 38 | 2026-10-10 |
 | `context` | 跨会话上下文与笔记 | 0.1 MB | 7 | 2026-09-17 |
 
 表 1 的体积是磁盘占用；实际入库的内容不含 `.venv`、`.env`、PDF、安装包与 wheel，
@@ -27,7 +29,7 @@
 | `simuprocject` | SimuHome 仿真内核源码（被控端本体） | 520.8 MB | 26315 | 是（simuprocject\Simuhome_experiment） | https://github.com/Mr-luo-q/Simuhome_experiment.git（main @ f8a813f 2026-06-17） |
 | `tdp-nlu-private-main` | 外部项目副本：TDP-NLU 私有仓库 | 5934.3 MB | 214794 | 否 | (无版本信息) |
 | `sandbox` | 外部项目副本：sandbox 实验目录 | 1469.0 MB | 224002 | 否 | (无版本信息) |
-| `related paper` | 相关论文 PDF 与资料 | 282.7 MB | 112 | 否 | (无版本信息) |
+| `related paper` | 相关论文 PDF 与资料 | 282.8 MB | 113 | 否 | (无版本信息) |
 | `milocoproject` | 外部项目副本：MILoco | 275.4 MB | 734 | 否 | (无版本信息) |
 | `homebenchproject` | HomeBench 相关项目副本 | 56.3 MB | 22 | 否 | (无版本信息) |
 | `sageproject` | SAGE 相关项目副本 | 15.7 MB | 130 | 否 | (无版本信息) |
@@ -41,8 +43,10 @@
 | `finally new paper/4个bench/03_2026_arXiv_SMH-Bench-Environment-Grounded_智能家居环境推理基准_英.no_watermark.zh-CN.mono.pdf` | 26.4 MB |
 | `related paper/91_2026_arXiv_SMH-Bench-Environment-Grounded_智能家居环境推理基准_英.no_watermark.zh-CN.mono.pdf` | 26.4 MB |
 | `sandbox/reference paper/1_智能家居核心Benchmark/04a_SMH-Bench_本地整理版.pdf` | 26.4 MB |
+| `finally new paper/4个bench/03_2026_arXiv_SMH-Bench-Environment-Grounded_EN.pdf` | 25.8 MB |
 | `sandbox/reference paper/1_智能家居核心Benchmark/04_SMH-Bench_官方_arXiv_2606.01912.pdf` | 25.8 MB |
 | `finally new paper/方法相关的论文/19_2026_arXiv_HomeFlow-Data-Flywheel-Smart-Home_数据飞轮智能家居训练_中.pdf` | 18.4 MB |
+| `finally new paper/方法相关的论文/19_2026_arXiv_HomeFlow-Data-Flywheel-Smart-Home_EN.pdf` | 17.9 MB |
 | `related paper/2024_2026_smart_home_search_collection/2026/2606.01230.pdf` | 17.9 MB |
 | `related paper/new paper/SAGE_Sasha引用论文/02_SAGE相关/HomeFlow.pdf` | 17.9 MB |
 | `related paper/new paper/SAGE_Sasha引用论文/01_Sasha相关/What-If-Smart-Homes-Could-See.pdf` | 15.7 MB |
@@ -75,9 +79,7 @@
 | `finally new paper/方法相关的论文/09_2024_ACM-CCS_Sasha-Creative-Goal-Oriented-Reasoning_Sasha创意目标导向推理_中.pdf` | 3.7 MB |
 | `related paper/new paper/59_2024_ACM-CCS_Sasha-Creative-Goal-Oriented-Reasoning_Sasha创意目标导向推理_中.pdf` | 3.7 MB |
 | `related paper/2024_2026_smart_home_search_collection/2026/2604.10110.pdf` | 3.6 MB |
-| `related paper/2024_2026_smart_home_search_collection/2026/2605.06897.pdf` | 3.6 MB |
-| `related paper/智能家居LLM与Agent精选14篇/2605.06897.pdf` | 3.6 MB |
-| （其余 106 个小文件） | 124.3 MB |
+| （其余 109 个小文件） | 132.5 MB |
 
 ## 4. 重新生成
 

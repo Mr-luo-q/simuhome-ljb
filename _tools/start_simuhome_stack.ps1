@@ -3,6 +3,9 @@
 # 顺序有依赖：发布器读 SimuHome、写 MQTT；HA 靠 MQTT discovery 建实体。
 # 每一步都是幂等的：已在跑就跳过，只在"没装 home"时才需要载入 home_full.json。
 #
+# 前置（克隆 SimuHome、装 Mosquitto、生成 MQTT 账号、HA 加 MQTT 集成）见 deploy\03_沙盒全链路部署.md。
+# 首次使用且 HA 容器还不存在时，先设 HA 配置目录：$env:HA_CONFIG_DIR = "D:\homeassistant\config"
+#
 # 用法：powershell -NoProfile -ExecutionPolicy Bypass -File _tools\start_simuhome_stack.ps1
 #      -ResetHome 强制把 SimuHome 重置回 home_full.json 的初始状态
 
@@ -10,11 +13,23 @@ param(
     [switch]$ResetHome
 )
 
-$root = "D:\D_coderesource\simuhome"
-$python = "C:\ProgramData\anaconda3\python.exe"
-$compose = "$root\old_simuhome_bridge_project\compose.yaml"
-$homeJson = "$root\simuprocject\Simuhome_experiment\home_full.json"
-$tokenFile = "$root\_secrets\ha_token.txt"
+$root = Split-Path -Parent $PSScriptRoot
+$compose = Join-Path $root "deploy\compose.yaml"
+$homeJson = Join-Path $root "simuprocject\Simuhome_experiment\home_full.json"
+$tokenFile = Join-Path $root "_secrets\ha_token.txt"
+
+$python = (Get-Command python -ErrorAction SilentlyContinue).Source
+if (-not $python) { $python = (Get-Command py -ErrorAction SilentlyContinue).Source }
+if (-not $python) {
+    Write-Error "找不到 python，请安装 Python 3.11+ 并加入 PATH"
+    exit 1
+}
+
+if (-not (Test-Path $homeJson)) {
+    Write-Error "未找到 SimuHome 仿真：$homeJson"
+    Write-Error "请先按 deploy\03_沙盒全链路部署.md 克隆上游源码到 simuprocject\Simuhome_experiment"
+    exit 1
+}
 
 function Wait-Http {
     param([string]$Url, [int]$Seconds = 180, [int]$Expect = 200)
@@ -53,6 +68,11 @@ if (docker inspect homeassistant --format '{{.State.Status}}' 2>$null) {
         docker start homeassistant | Out-Null
     }
 } else {
+    if (-not $env:HA_CONFIG_DIR) {
+        Write-Error "HA 容器不存在，且未设置 HA_CONFIG_DIR（HA 配置目录）"
+        Write-Error '示例：$env:HA_CONFIG_DIR = "D:\homeassistant\config"；见 deploy\03_沙盒全链路部署.md'
+        exit 1
+    }
     docker compose -f $compose up -d | Out-Null
 }
 Wait-Http -Url "http://127.0.0.1:8123/" -Seconds 300 | Out-Null
@@ -79,6 +99,10 @@ if ($simuReady -and ($ResetHome -or $rooms -eq 0)) {
 
 # 4 MQTT broker（脚本内部会跑 health_check）
 #    这两个脚本会留下长命子进程，子进程会继承管道写端——所以不能接管道（接了会挂住）
+if (-not (Test-Path "$root\simuhome_mqtt_publisher\broker\mosquitto.passwd")) {
+    Write-Error "未找到 MQTT 账号文件 mosquitto.passwd，先跑 broker\make_credentials.ps1（见 deploy\03）"
+    exit 1
+}
 & "$root\simuhome_mqtt_publisher\broker\start_mosquitto.ps1"
 
 # 5 发布器（脚本内部等 5 秒；已在跑会跳过）
